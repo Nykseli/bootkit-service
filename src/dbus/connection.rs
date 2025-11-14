@@ -1,11 +1,18 @@
 use zbus::{connection::Builder, interface, Connection, Result};
 
+use crate::grub2::GrubFile;
+
 pub struct BootloaderConfig {}
 
 #[interface(name = "org.opensuse.bootloader.Config")]
 impl BootloaderConfig {
     async fn get_config(&self) -> String {
-        String::from("Hello world!")
+        let grub = GrubFile::new("/etc/default/grub");
+        grub.values()
+            .iter()
+            .map(|val| format!("{}=\"{}\"", val.key, val.value))
+            .collect::<Vec<String>>()
+            .join("\n")
     }
 }
 

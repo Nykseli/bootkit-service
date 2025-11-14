@@ -2,6 +2,7 @@ use std::future::pending;
 use zbus::Result;
 
 mod dbus;
+mod grub2;
 use crate::dbus::connection::create_connection;
 
 #[tokio::main]
