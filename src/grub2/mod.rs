@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs::read_to_string, path::Path};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyValue {
     line: usize,
     original: String,
