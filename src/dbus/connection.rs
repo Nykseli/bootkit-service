@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use zbus::{connection::Builder, interface, Connection, Result};
+use zbus::{connection::Builder, interface, object_server::SignalEmitter, Connection, Result};
 
 use crate::{config::ConfigArgs, grub2::GrubFile};
 
@@ -26,6 +26,10 @@ impl BootloaderConfig {
 
         serde_json::to_string(&data).unwrap()
     }
+
+    /// Signal for grub file being changed, provided by zbus macro
+    #[zbus(signal)]
+    async fn file_changed(emitter: &SignalEmitter<'_>) -> Result<()>;
 }
 
 pub async fn create_connection(args: &ConfigArgs) -> Result<Connection> {
