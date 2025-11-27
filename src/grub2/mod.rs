@@ -37,19 +37,11 @@ impl KeyValue {
     }
 }
 
-#[derive(Debug)]
-enum GrubLine {
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "t")]
+pub enum GrubLine {
     KeyValue(KeyValue),
-    String(String),
-}
-
-impl GrubLine {
-    fn as_keyval(&self) -> Option<&KeyValue> {
-        match self {
-            GrubLine::KeyValue(keyval) => Some(keyval),
-            _ => None,
-        }
-    }
+    String { raw_line: String },
 }
 
 #[derive(Debug)]
@@ -68,7 +60,9 @@ impl GrubFile {
         for (idx, line) in file.lines().enumerate() {
             let trimmed = line.trim();
             if trimmed.is_empty() || trimmed.starts_with('#') {
-                lines.push(GrubLine::String(line.into()));
+                lines.push(GrubLine::String {
+                    raw_line: line.into(),
+                });
                 continue;
             }
 
@@ -80,8 +74,8 @@ impl GrubFile {
         Self { lines, keyvals }
     }
 
-    pub fn values(&self) -> Vec<&KeyValue> {
-        self.lines.iter().filter_map(|kv| kv.as_keyval()).collect()
+    pub fn lines(&self) -> &[GrubLine] {
+        &self.lines
     }
 
     pub fn keyvalues(&self) -> &HashMap<String, KeyValue> {

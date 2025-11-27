@@ -21,7 +21,7 @@ impl BootloaderConfig {
         let grub = GrubFile::new("/etc/default/grub");
 
         let value_map = serde_json::to_value(grub.keyvalues()).unwrap();
-        let value_list = serde_json::to_value(grub.values()).unwrap();
+        let value_list = serde_json::to_value(grub.lines()).unwrap();
         let data = ConfigData {
             value_list,
             value_map,
