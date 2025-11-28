@@ -37,11 +37,30 @@ impl KeyValue {
     }
 }
 
+impl From<KeyValue> for String {
+    fn from(value: KeyValue) -> Self {
+        if !value.changed {
+            value.original
+        } else {
+            format!("{}=\"{}\"", value.key, value.value)
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "t")]
 pub enum GrubLine {
     KeyValue(KeyValue),
     String { raw_line: String },
+}
+
+impl From<GrubLine> for String {
+    fn from(value: GrubLine) -> Self {
+        match value {
+            GrubLine::KeyValue(key_value) => key_value.into(),
+            GrubLine::String { raw_line } => raw_line,
+        }
+    }
 }
 
 #[derive(Debug)]

@@ -1,10 +1,12 @@
+use std::{fs::File, io::Write, process::Command};
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use zbus::{connection::Builder, interface, object_server::SignalEmitter, Connection, Result};
 
 use crate::{
     config::ConfigArgs,
-    grub2::{GrubBootEntries, GrubFile},
+    grub2::{GrubBootEntries, GrubFile, GrubLine},
 };
 
 pub struct BootloaderConfig {}
@@ -28,6 +30,39 @@ impl BootloaderConfig {
         };
 
         serde_json::to_string(&data).unwrap()
+    }
+
+    async fn save_config(&self, data: &str) -> String {
+        // TODO: fail if data is empty
+        let config: ConfigData = serde_json::from_str(data).unwrap();
+        let value_list: Vec<GrubLine> = serde_json::from_value(config.value_list).unwrap();
+        let lines: Vec<String> = value_list.into_iter().map(|val| val.into()).collect();
+        let file = lines.join("\n");
+        println!("{file}");
+        // TODO: start a background thread that executes the grub config
+        //       and return an ID that the client can use to poll information
+
+        // WARN: this triggers FileChanged signal
+        let mut grub = File::create("/etc/default/grub").unwrap();
+        write!(grub, "{}", file).unwrap();
+
+        let mkconfig_child = Command::new("grub2-mkconfig")
+            .arg("-o")
+            .arg("/boot/grub2/grub.cfg")
+            .output()
+            .unwrap();
+
+        // TODO: logging
+        println!(
+            "grub2-mkconfig stdout: {}",
+            String::from_utf8(mkconfig_child.stdout).unwrap()
+        );
+        println!(
+            "grub2-mkconfig stderr: {}",
+            String::from_utf8(mkconfig_child.stderr).unwrap()
+        );
+
+        "ok".to_string()
     }
 
     /// Signal for grub file being changed, provided by zbus macro
