@@ -89,9 +89,7 @@ pub struct GrubFile {
 }
 
 impl GrubFile {
-    pub fn new<P: AsRef<Path>>(path: P) -> Self {
-        let file = read_to_string(path).unwrap();
-
+    pub fn new(file: &str) -> Self {
         let mut lines = Vec::new();
         let mut keyvals = HashMap::new();
 
@@ -110,6 +108,11 @@ impl GrubFile {
         }
 
         Self { lines, keyvals }
+    }
+
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Self {
+        let file = read_to_string(path).unwrap();
+        Self::new(&file)
     }
 
     pub fn from_lines(grub_lines: &[GrubLine]) -> Self {

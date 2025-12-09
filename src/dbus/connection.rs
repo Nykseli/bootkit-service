@@ -2,6 +2,7 @@ use std::{fs::File, io::Write, process::Command};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use similar::TextDiff;
 use zbus::{connection::Builder, interface, object_server::SignalEmitter, Connection, Result};
 
 use crate::{
@@ -18,18 +19,30 @@ pub struct BootloaderConfig {
 struct ConfigData {
     value_map: Value,
     value_list: Value,
+    config_diff: Value,
 }
 
 #[interface(name = "org.opensuse.bootloader.Config")]
 impl BootloaderConfig {
     async fn get_config(&self) -> String {
-        let grub = GrubFile::new(GRUB_FILE_PATH);
+        let grub = GrubFile::from_file(GRUB_FILE_PATH);
+        let latest = self.db.latest_grub2().await;
+        let diff = TextDiff::from_lines(&latest.grub_config, &grub.as_string())
+            .unified_diff()
+            .to_string();
+
+        let config_diff = if diff.is_empty() {
+            Value::Null
+        } else {
+            Value::String(diff)
+        };
 
         let value_map = serde_json::to_value(grub.keyvalues()).unwrap();
         let value_list = serde_json::to_value(grub.lines()).unwrap();
         let data = ConfigData {
             value_list,
             value_map,
+            config_diff,
         };
 
         serde_json::to_string(&data).unwrap()

@@ -2,8 +2,11 @@ use sqlx::{sqlite::SqlitePoolOptions, Error, Pool, Sqlite};
 
 use crate::{
     config::{DATABASE_PATH, GRUB_FILE_PATH},
+    db::grub2::Grub2Snapshot,
     grub2::GrubFile,
 };
+
+mod grub2;
 
 #[derive(Clone)]
 pub struct Database {
@@ -37,7 +40,7 @@ impl Database {
                 .unwrap();
 
             // TODO: get selected kernel from somewhere
-            let grub = GrubFile::new(GRUB_FILE_PATH);
+            let grub = GrubFile::from_file(GRUB_FILE_PATH);
             self.save_grub2(&grub).await;
         }
     }
@@ -54,5 +57,18 @@ impl Database {
         .execute(&self.pool)
         .await
         .unwrap();
+    }
+
+    pub async fn latest_grub2(&self) -> Grub2Snapshot {
+        // select id from grub2_snapshot order by id DESC LIMIT 1;
+        let snapshot = sqlx::query_as!(
+            Grub2Snapshot,
+            "SELECT * FROM grub2_snapshot ORDER BY id DESC LIMIT 1",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .unwrap();
+
+        snapshot
     }
 }
