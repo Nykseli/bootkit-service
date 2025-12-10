@@ -2,6 +2,16 @@ use zbus::{connection::Builder, interface, object_server::SignalEmitter, Connect
 
 use crate::{config::ConfigArgs, db::Database, dbus::handler::DbusHandler};
 
+struct BootKitInfo {}
+
+#[interface(name = "org.opensuse.bootloader.Info")]
+impl BootKitInfo {
+    async fn get_version(&self) -> String {
+        log::debug!("Calling org.opensuse.bootloader.Info GetVersion");
+        env!("CARGO_PKG_VERSION").into()
+    }
+}
+
 pub struct BootloaderConfig {
     handler: DbusHandler,
 }
@@ -50,6 +60,7 @@ pub async fn create_connection(args: &ConfigArgs, db: &Database) -> Result<Conne
 
     let connection = connection
         .name("org.opensuse.bootloader")?
+        .serve_at("/org/opensuse/bootloader", BootKitInfo {})?
         .serve_at("/org/opensuse/bootloader", config)?
         .serve_at("/org/opensuse/bootloader", bootentry)?
         .build()
