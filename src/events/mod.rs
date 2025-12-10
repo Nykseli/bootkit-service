@@ -1,7 +1,7 @@
 use inotify::{EventMask, Inotify, WatchMask};
 use zbus::Connection;
 
-use crate::{config::GRUB_ROOT_PATH, dbus::connection::BootloaderConfigSignals};
+use crate::{config::GRUB_ROOT_PATH, dbus::connection::BootKitConfigSignals};
 
 pub async fn listen_files(connection: &Connection) -> zbus::Result<()> {
     let mut inotify = Inotify::init().expect("Failed to initialize inotify");
@@ -26,7 +26,7 @@ pub async fn listen_files(connection: &Connection) -> zbus::Result<()> {
                     signaled = true;
                     connection
                         .object_server()
-                        .interface("/org/opensuse/bootloader")
+                        .interface("/org/opensuse/bootkit")
                         .await?
                         .file_changed()
                         .await?;

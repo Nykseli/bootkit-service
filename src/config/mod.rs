@@ -25,9 +25,9 @@ pub const GRUB_ROOT_PATH: &'static str = "/etc/default";
 pub const GRUB_ROOT_PATH: &'static str = "tmp";
 
 #[cfg(not(feature = "dev"))]
-pub const DATABASE_PATH: &'static str = "/var/lib/lastlog/lastlog2.db";
+pub const DATABASE_PATH: &'static str = "/var/lib/bootkit/bootkit.db";
 #[cfg(feature = "dev")]
-pub const DATABASE_PATH: &'static str = "tmp/bootloader.db";
+pub const DATABASE_PATH: &'static str = "tmp/bootkit.db";
 
 #[cfg(not(feature = "dev"))]
 pub const DEFAULT_LOG_LEVEL: tracing::Level = tracing::Level::INFO;

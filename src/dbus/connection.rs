@@ -4,27 +4,27 @@ use crate::{config::ConfigArgs, db::Database, dbus::handler::DbusHandler};
 
 struct BootKitInfo {}
 
-#[interface(name = "org.opensuse.bootloader.Info")]
+#[interface(name = "org.opensuse.bootkit.Info")]
 impl BootKitInfo {
     async fn get_version(&self) -> String {
-        log::debug!("Calling org.opensuse.bootloader.Info GetVersion");
+        log::debug!("Calling org.opensuse.bootkit.Info GetVersion");
         env!("CARGO_PKG_VERSION").into()
     }
 }
 
-pub struct BootloaderConfig {
+pub struct BootKitConfig {
     handler: DbusHandler,
 }
 
-#[interface(name = "org.opensuse.bootloader.Config")]
-impl BootloaderConfig {
+#[interface(name = "org.opensuse.bootkit.Config")]
+impl BootKitConfig {
     async fn get_config(&self) -> String {
-        log::debug!("Calling org.opensuse.bootloader.Config GetConfig");
+        log::debug!("Calling org.opensuse.bootkit.Config GetConfig");
         self.handler.get_grub2_config_json().await
     }
 
     async fn save_config(&self, data: &str) -> String {
-        log::debug!("Calling org.opensuse.bootloader.Config SaveConfig");
+        log::debug!("Calling org.opensuse.bootkit.Config SaveConfig");
         self.handler.save_grub2_config(data).await
     }
 
@@ -37,17 +37,17 @@ pub struct BootEntry {
     handler: DbusHandler,
 }
 
-#[interface(name = "org.opensuse.bootloader.BootEntry")]
+#[interface(name = "org.opensuse.bootkit.BootEntry")]
 impl BootEntry {
     async fn get_entries(&self) -> String {
-        log::debug!("Calling org.opensuse.bootloader.BootEntry GetEntries");
+        log::debug!("Calling org.opensuse.bootkit.BootEntry GetEntries");
         self.handler.get_grub2_boot_entries().await
     }
 }
 
 pub async fn create_connection(args: &ConfigArgs, db: &Database) -> Result<Connection> {
     let handler = DbusHandler::new(db.clone());
-    let config = BootloaderConfig {
+    let config = BootKitConfig {
         handler: handler.clone(),
     };
     let bootentry = BootEntry { handler };
@@ -59,10 +59,10 @@ pub async fn create_connection(args: &ConfigArgs, db: &Database) -> Result<Conne
     };
 
     let connection = connection
-        .name("org.opensuse.bootloader")?
-        .serve_at("/org/opensuse/bootloader", BootKitInfo {})?
-        .serve_at("/org/opensuse/bootloader", config)?
-        .serve_at("/org/opensuse/bootloader", bootentry)?
+        .name("org.opensuse.bootkit")?
+        .serve_at("/org/opensuse/bootkit", BootKitInfo {})?
+        .serve_at("/org/opensuse/bootkit", config)?
+        .serve_at("/org/opensuse/bootkit", bootentry)?
         .build()
         .await?;
 
