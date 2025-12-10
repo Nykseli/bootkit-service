@@ -107,23 +107,25 @@ impl DbusHandler {
         // WARN: this triggers FileChanged signal
         let mut grub = File::create(GRUB_FILE_PATH).unwrap();
         write!(grub, "{}", file).unwrap();
+        log::debug!("Grub2 config was written to {GRUB_FILE_PATH}");
 
+        log::debug!("Calling grub2-mkconfig -o /boot/grub2/grub.cfg");
         let mkconfig_child = Command::new("grub2-mkconfig")
             .arg("-o")
             .arg("/boot/grub2/grub.cfg")
             .output()
             .ctx(dctx!(), "Failed to read output from grub2-mkconfig")?;
 
-        // TODO: logging
-        println!(
+        log::debug!(
             "grub2-mkconfig stdout: {}",
             String::from_utf8(mkconfig_child.stdout).unwrap()
         );
-        println!(
+        log::debug!(
             "grub2-mkconfig stderr: {}",
             String::from_utf8(mkconfig_child.stderr).unwrap()
         );
 
+        log::debug!("Calling grub2-mkconfig -o /boot/grub2/grub.cfg done");
         // if everything is okay, save the snapshot to a database
         self.db.save_grub2(&grub_file).await?;
 

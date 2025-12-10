@@ -22,3 +22,8 @@ pub const GRUB_ROOT_PATH: &'static str = "tmp";
 pub const DATABASE_PATH: &'static str = "/var/lib/lastlog/lastlog2.db";
 #[cfg(feature = "dev")]
 pub const DATABASE_PATH: &'static str = "tmp/bootloader.db";
+
+#[cfg(not(feature = "dev"))]
+pub const DEFAULT_LOG_LEVEL: tracing::Level = tracing::Level::INFO;
+#[cfg(feature = "dev")]
+pub const DEFAULT_LOG_LEVEL: tracing::Level = tracing::Level::DEBUG;

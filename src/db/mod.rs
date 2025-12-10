@@ -39,16 +39,19 @@ impl Database {
         .await;
 
         if let Err(Error::RowNotFound) = grub_table {
+            log::debug!("grub2_snapshot table not found from database, creating it");
             sqlx::query(include_str!("../../db/grub2.sql"))
                 .execute(&self.pool)
                 .await
                 .ctx(dctx!(), "Cannot initialize grub2_snapshots")?;
 
+            log::debug!("Setting first entry to grub2_snapshots");
             // TODO: get selected kernel from somewhere
             let grub = GrubFile::from_file(GRUB_FILE_PATH)?;
             self.save_grub2(&grub).await?;
         }
 
+        log::info!("Initialised database at {DATABASE_PATH}");
         Ok(())
     }
 
@@ -64,6 +67,7 @@ impl Database {
         .await
         .ctx(dctx!(), "Cannot insert new entry to grub2_snapshot table")?;
 
+        log::debug!("New grub2 config snapshot inserted to grub2_snapshot table");
         Ok(())
     }
 

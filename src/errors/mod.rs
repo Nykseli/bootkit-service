@@ -11,6 +11,12 @@ impl DCtx {
     }
 }
 
+impl std::fmt::Display for DCtx {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum DErrorType {
@@ -35,6 +41,12 @@ impl DErrorType {
     }
 }
 
+impl std::fmt::Display for DErrorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_string())
+    }
+}
+
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct DError {
@@ -44,6 +56,7 @@ pub struct DError {
 
 impl DError {
     fn new(ctx: DCtx, error: DErrorType) -> Self {
+        log::debug!("Error at {ctx}: {error}");
         Self { ctx, error }
     }
 
@@ -66,10 +79,7 @@ impl<T> DRes<T> for std::io::Result<T> {
     fn ctx<M: Into<String>>(self, ctx: DCtx, msg: M) -> DResult<T> {
         match self {
             Ok(value) => Ok(value),
-            Err(err) => Err(DError {
-                ctx,
-                error: DErrorType::Io(msg.into(), err),
-            }),
+            Err(err) => Err(DError::new(ctx, DErrorType::Io(msg.into(), err))),
         }
     }
 }
@@ -78,10 +88,7 @@ impl<T> DRes<T> for sqlx::Result<T> {
     fn ctx<M: Into<String>>(self, ctx: DCtx, msg: M) -> DResult<T> {
         match self {
             Ok(value) => Ok(value),
-            Err(err) => Err(DError {
-                ctx,
-                error: DErrorType::Sqlx(msg.into(), err),
-            }),
+            Err(err) => Err(DError::new(ctx, DErrorType::Sqlx(msg.into(), err))),
         }
     }
 }
@@ -90,10 +97,7 @@ impl<T> DRes<T> for zbus::Result<T> {
     fn ctx<M: Into<String>>(self, ctx: DCtx, msg: M) -> DResult<T> {
         match self {
             Ok(value) => Ok(value),
-            Err(err) => Err(DError {
-                ctx,
-                error: DErrorType::Zbus(msg.into(), err),
-            }),
+            Err(err) => Err(DError::new(ctx, DErrorType::Zbus(msg.into(), err))),
         }
     }
 }

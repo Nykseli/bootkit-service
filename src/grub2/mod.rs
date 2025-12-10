@@ -162,6 +162,7 @@ pub struct GrubBootEntries {
 
 impl GrubBootEntries {
     pub fn new() -> io::Result<Self> {
+        log::debug!("Reading kenrnel boot entries from /boot/grub2/grub.cfg");
         let contents = read_to_string("/boot/grub2/grub.cfg")?;
         // this is unrecovable error so panic is appropriate
         let re = Regex::new(r"menuentry\s+'([^']+)").expect("Invalid regex");

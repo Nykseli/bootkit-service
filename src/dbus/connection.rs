@@ -9,10 +9,12 @@ pub struct BootloaderConfig {
 #[interface(name = "org.opensuse.bootloader.Config")]
 impl BootloaderConfig {
     async fn get_config(&self) -> String {
+        log::debug!("Calling org.opensuse.bootloader.Config GetConfig");
         self.handler.get_grub2_config_json().await
     }
 
     async fn save_config(&self, data: &str) -> String {
+        log::debug!("Calling org.opensuse.bootloader.Config SaveConfig");
         self.handler.save_grub2_config(data).await
     }
 
@@ -28,6 +30,7 @@ pub struct BootEntry {
 #[interface(name = "org.opensuse.bootloader.BootEntry")]
 impl BootEntry {
     async fn get_entries(&self) -> String {
+        log::debug!("Calling org.opensuse.bootloader.BootEntry GetEntries");
         self.handler.get_grub2_boot_entries().await
     }
 }
@@ -39,10 +42,10 @@ pub async fn create_connection(args: &ConfigArgs, db: &Database) -> Result<Conne
     };
     let bootentry = BootEntry { handler };
 
-    let connection = if args.session {
-        Builder::session()?
+    let (connection, contype) = if args.session {
+        (Builder::session()?, "session")
     } else {
-        Builder::system()?
+        (Builder::system()?, "system")
     };
 
     let connection = connection
@@ -51,6 +54,8 @@ pub async fn create_connection(args: &ConfigArgs, db: &Database) -> Result<Conne
         .serve_at("/org/opensuse/bootloader", bootentry)?
         .build()
         .await?;
+
+    log::info!("Started dbus {contype} connection");
 
     Ok(connection)
 }
