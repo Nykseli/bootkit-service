@@ -73,6 +73,11 @@ struct RemoveSnapshotData {
     snapshot_id: i64,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+struct SelectSnapshotData {
+    snapshot_id: i64,
+}
+
 #[derive(Clone)]
 pub struct DbusHandler {
     db: Database,
@@ -83,50 +88,13 @@ impl DbusHandler {
         Self { db }
     }
 
-    async fn _get_grub2_config(&self) -> DResult<ConfigData> {
-        let grub = GrubFile::from_file(GRUB_FILE_PATH)?;
-        let kernel_entries = GrubBootEntries::new()?;
-        let latest = self.db.latest_grub2().await?;
-        let diff = TextDiff::from_lines(&latest.grub_config, &grub.as_string())
-            .unified_diff()
-            .to_string();
-
-        // TODO: add the potential difference in kernel entries to config_diff as well
-        let config_diff = if diff.is_empty() {
-            None
-        } else {
-            Some(Value::String(diff))
-        };
-
-        let value_map = serde_json::to_value(grub.keyvalues())
-            .ctx(dctx!(), "Cannot turn grub keyvalues into json")?;
-        let value_list =
-            serde_json::to_value(grub.lines()).ctx(dctx!(), "Cannot turn grub lines into json")?;
-
-        Ok(ConfigData {
-            value_list,
-            value_map,
-            config_diff,
-            selected_kernel: kernel_entries.selected().map(str::to_string),
-        })
-    }
-
-    /// Get grub config config (or the relevant error) that can be safely sent via dbus
-    pub async fn get_grub2_config_json(&self) -> String {
-        let data: DbusResponse = self._get_grub2_config().await.into();
-        data.as_string()
-    }
-
-    async fn _save_grub2_config(&self, data: &str) -> DResult<String> {
-        let config: ConfigData = serde_json::from_str(data)
-            .ctx(dctx!(), "Malformed JSON data received from the client")?;
-        let value_list: Vec<GrubLine> = serde_json::from_value(config.value_list)
-            .ctx(dctx!(), "Cannot turn json into GrubLines")?;
-
-        let kernel_entries = GrubBootEntries::new()?;
-        let mut grub_file = GrubFile::from_lines(&value_list);
-
-        if let Some(kernel) = &config.selected_kernel {
+    async fn set_grub_system(
+        &self,
+        grub_file: &mut GrubFile,
+        selected_kernel: &Option<String>,
+    ) -> DResult<()> {
+        if let Some(kernel) = &selected_kernel {
+            let kernel_entries = GrubBootEntries::new()?;
             if !kernel_entries.entries().contains(kernel) {
                 return Err(DError::new(
                     dctx!(),
@@ -174,7 +142,7 @@ impl DbusHandler {
 
         log::debug!("Calling grub2-mkconfig -o /boot/grub2/grub.cfg done");
 
-        if let Some(kernel) = &config.selected_kernel {
+        if let Some(kernel) = &selected_kernel {
             log::debug!("Calling grub2-set-default {kernel}");
 
             let set_default = Command::new("grub2-set-default")
@@ -193,6 +161,52 @@ impl DbusHandler {
 
             log::debug!("Calling grub2-set-default {kernel}, done");
         }
+        Ok(())
+    }
+
+    async fn _get_grub2_config(&self) -> DResult<ConfigData> {
+        let grub = GrubFile::from_file(GRUB_FILE_PATH)?;
+        let kernel_entries = GrubBootEntries::new()?;
+        let latest = self.db.latest_grub2().await?;
+        let diff = TextDiff::from_lines(&latest.grub_config, &grub.as_string())
+            .unified_diff()
+            .to_string();
+
+        // TODO: add the potential difference in kernel entries to config_diff as well
+        let config_diff = if diff.is_empty() {
+            None
+        } else {
+            Some(Value::String(diff))
+        };
+
+        let value_map = serde_json::to_value(grub.keyvalues())
+            .ctx(dctx!(), "Cannot turn grub keyvalues into json")?;
+        let value_list =
+            serde_json::to_value(grub.lines()).ctx(dctx!(), "Cannot turn grub lines into json")?;
+
+        Ok(ConfigData {
+            value_list,
+            value_map,
+            config_diff,
+            selected_kernel: kernel_entries.selected().map(str::to_string),
+        })
+    }
+
+    /// Get grub config config (or the relevant error) that can be safely sent via dbus
+    pub async fn get_grub2_config_json(&self) -> String {
+        let data: DbusResponse = self._get_grub2_config().await.into();
+        data.as_string()
+    }
+
+    async fn _save_grub2_config(&self, data: &str) -> DResult<String> {
+        let config: ConfigData = serde_json::from_str(data)
+            .ctx(dctx!(), "Malformed JSON data received from the client")?;
+        let value_list: Vec<GrubLine> = serde_json::from_value(config.value_list)
+            .ctx(dctx!(), "Cannot turn json into GrubLines")?;
+
+        let mut grub_file = GrubFile::from_lines(&value_list);
+        self.set_grub_system(&mut grub_file, &config.selected_kernel)
+            .await?;
 
         // if everything is okay, save the snapshot to a database
         self.db
@@ -294,6 +308,51 @@ impl DbusHandler {
 
     pub async fn remove_snapshot(&self, data: &str) -> String {
         let data: DbusResponse = self._remove_snapshot(data).await.into();
+        data.as_string()
+    }
+
+    async fn _select_snapshot(&self, data: &str) -> DResult<String> {
+        let select_data: SelectSnapshotData =
+            serde_json::from_str(data).ctx(dctx!(), "Malformed JSON data received from client")?;
+
+        log::debug!(
+            "Trying to select snapshot with id {}",
+            select_data.snapshot_id
+        );
+
+        // Don't allow reselecting the selected snapshot so things don't get confusing
+        let selected = self.db.selected_snapshot().await?;
+        let selected_id = if let Some(id) = selected.grub2_snapshot_id {
+            id
+        } else {
+            self.db.latest_grub2().await?.id
+        };
+
+        if select_data.snapshot_id == selected_id {
+            return Err(DError::generic(
+                dctx!(),
+                "Cannot reselect currently selected snapshot",
+            ));
+        }
+
+        let snapshot = self.db.grub2_snapshot(select_data.snapshot_id).await?;
+        let mut grub_file = GrubFile::new(&snapshot.grub_config)?;
+        self.set_grub_system(&mut grub_file, &snapshot.selected_kernel)
+            .await?;
+        self.db
+            .set_selected_snapshot(Some(select_data.snapshot_id))
+            .await?;
+
+        log::debug!(
+            "Succesfully selected snapshot with id {}",
+            select_data.snapshot_id
+        );
+
+        Ok("ok".into())
+    }
+
+    pub async fn select_snapshot(&self, data: &str) -> String {
+        let data: DbusResponse = self._select_snapshot(data).await.into();
         data.as_string()
     }
 }

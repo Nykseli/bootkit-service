@@ -131,12 +131,40 @@ impl Database {
         Ok(snapshots)
     }
 
+    pub async fn grub2_snapshot(&self, id: i64) -> DResult<Grub2Snapshot> {
+        let snapshots = sqlx::query_as!(
+            Grub2Snapshot,
+            "SELECT * FROM grub2_snapshot WHERE id=(?)",
+            id
+        )
+        .fetch_one(&self.pool)
+        .await
+        .ctx(
+            dctx!(),
+            "Cannot fetch snapshot with id '{id}' from grub2_snapshot table",
+        )?;
+
+        Ok(snapshots)
+    }
+
     pub async fn selected_snapshot(&self) -> DResult<SelectedSnapshot> {
         let snapshot = sqlx::query_as!(SelectedSnapshot, "SELECT * FROM selected_snapshot",)
             .fetch_one(&self.pool)
             .await
-            .ctx(dctx!(), "Cannot fetch snapshot from grub2_snapshot table")?;
+            .ctx(
+                dctx!(),
+                "Cannot fetch selected snapshot from selected_snapshot table",
+            )?;
 
         Ok(snapshot)
+    }
+
+    pub async fn set_selected_snapshot(&self, id: Option<i64>) -> DResult<()> {
+        sqlx::query!("UPDATE selected_snapshot SET grub2_snapshot_id=(?)", id)
+            .execute(&self.pool)
+            .await
+            .ctx(dctx!(), "Cannot snapshot from selected snapshot table")?;
+
+        Ok(())
     }
 }
