@@ -70,6 +70,10 @@ impl DError {
         }
     }
 
+    pub fn generic<M: Into<String>>(ctx: DCtx, message: M) -> Self {
+        Self::new(ctx, DErrorType::Error(message.into()))
+    }
+
     fn with_trace<M: Into<String>>(mut self, ctx: DCtx, message: M) -> Self {
         let message = message.into();
         log::trace!("    trace [{}] {ctx}: {message}", self.trace.len() + 1);

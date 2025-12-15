@@ -22,6 +22,11 @@ impl BootKitSnapshots {
         log::debug!("Calling org.opensuse.bootkit.Snapshot GetSnapshots");
         self.handler.get_snapshots().await
     }
+
+    async fn remove_snapshot(&self, data: &str) -> String {
+        log::debug!("Calling org.opensuse.bootkit.Snapshot RemoveSnapshot");
+        self.handler.remove_snapshot(data).await
+    }
 }
 
 pub struct BootKitConfig {

@@ -68,6 +68,11 @@ struct SnapshotData {
     selected: SelectedSnapshot,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+struct RemoveSnapshotData {
+    snapshot_id: i64,
+}
+
 #[derive(Clone)]
 pub struct DbusHandler {
     db: Database,
@@ -254,6 +259,41 @@ impl DbusHandler {
     /// Get snapshots that can be safely sent via dbus
     pub async fn get_snapshots(&self) -> String {
         let data: DbusResponse = self._get_snapshots().await.into();
+        data.as_string()
+    }
+
+    async fn _remove_snapshot(&self, data: &str) -> DResult<String> {
+        let rm_data: RemoveSnapshotData =
+            serde_json::from_str(data).ctx(dctx!(), "Malformed JSON data received from client")?;
+
+        log::debug!("Trying to remove snapshot with id {}", rm_data.snapshot_id);
+
+        // Don't allow deleting the selected snapshot so things don't get confusing
+        let selected = self.db.selected_snapshot().await?;
+        let selected_id = if let Some(id) = selected.grub2_snapshot_id {
+            id
+        } else {
+            self.db.latest_grub2().await?.id
+        };
+
+        if rm_data.snapshot_id == selected_id {
+            return Err(DError::generic(
+                dctx!(),
+                "Cannot remove currently selected snapshot",
+            ));
+        }
+
+        self.db.remove_grub2(rm_data.snapshot_id).await?;
+
+        log::debug!(
+            "Succesfully removed snapshot with id {}",
+            rm_data.snapshot_id
+        );
+        Ok("ok".into())
+    }
+
+    pub async fn remove_snapshot(&self, data: &str) -> String {
+        let data: DbusResponse = self._remove_snapshot(data).await.into();
         data.as_string()
     }
 }

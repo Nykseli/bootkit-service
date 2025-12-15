@@ -97,6 +97,16 @@ impl Database {
         Ok(())
     }
 
+    pub async fn remove_grub2(&self, grub_id: i64) -> DResult<()> {
+        sqlx::query!("DELETE FROM grub2_snapshot WHERE id=(?)", grub_id)
+            .execute(&self.pool)
+            .await
+            .ctx(dctx!(), "Cannot remove snapshot with id {grub_id}")?;
+
+        log::debug!("Grub2 snapshot with id {grub_id} was removed");
+        Ok(())
+    }
+
     pub async fn latest_grub2(&self) -> DResult<Grub2Snapshot> {
         let snapshot = sqlx::query_as!(
             Grub2Snapshot,
