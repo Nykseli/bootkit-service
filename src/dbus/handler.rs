@@ -92,20 +92,70 @@ impl DbusHandler {
         &self,
         grub_file: &mut GrubFile,
         selected_kernel: &Option<String>,
+        from_snapshot: bool,
     ) -> DResult<()> {
         if let Some(kernel) = &selected_kernel {
             let kernel_entries = GrubBootEntries::new()?;
-            if !kernel_entries.entries().contains(kernel) {
+            let kernel_entry = if let Some(entry) = kernel_entries
+                .entries()
+                .iter()
+                .find(|entry| entry.entry() == kernel)
+            {
+                entry.full_path()
+            } else {
                 return Err(DError::new(
                     dctx!(),
                     DErrorType::Error(format!(
                         "Kernel entry '{kernel}' is not found from grub configs"
                     )),
                 ));
-            }
+            };
 
-            // make sure GRUB_DEFAULT is set to saved as it's required by grub
-            grub_file.set_key_value("GRUB_DEFAULT", "saved");
+            log::debug!("Calling grub2-set-default {kernel_entry}");
+
+            let set_default = Command::new("grub2-set-default")
+                .arg(&kernel_entry)
+                .output()
+                .ctx(dctx!(), "Failed to read output from grub2-set-default")?;
+
+            log::debug!(
+                "grub2-set-default stdout: {}",
+                String::from_utf8_lossy(&set_default.stdout)
+            );
+            log::debug!(
+                "grub2-set-default stderr: {}",
+                String::from_utf8_lossy(&set_default.stderr)
+            );
+
+            log::debug!("Calling grub2-set-default {kernel_entry}, done");
+
+            // Only update grub file when selecting a snapshot
+            // old snapshots should always be set back the way they were
+            if !from_snapshot {
+                // make sure GRUB_DEFAULT is set to saved as it's required by grub
+                grub_file.set_key_value("GRUB_DEFAULT", "saved");
+            }
+        } else {
+            log::debug!("Removing default seleceted kernel");
+
+            // grub2-editenv /boot/grub2/grubenv unset saved_entry
+            let edit_env = Command::new("grub2-editenv")
+                .arg("/boot/grub2/grubenv")
+                .arg("unset")
+                .arg("saved_entry")
+                .output()
+                .ctx(dctx!(), "Failed to read output from grub2-editenv")?;
+
+            log::debug!(
+                "grub2-edit-env stdout: {}",
+                String::from_utf8_lossy(&edit_env.stdout)
+            );
+            log::debug!(
+                "grub2-edit-env stderr: {}",
+                String::from_utf8_lossy(&edit_env.stderr)
+            );
+
+            log::debug!("Removing default seleceted kernel done");
         }
 
         let file = grub_file.as_string();
@@ -142,46 +192,6 @@ impl DbusHandler {
 
         log::debug!("Calling grub2-mkconfig -o /boot/grub2/grub.cfg done");
 
-        if let Some(kernel) = &selected_kernel {
-            log::debug!("Calling grub2-set-default {kernel}");
-
-            let set_default = Command::new("grub2-set-default")
-                .arg(kernel)
-                .output()
-                .ctx(dctx!(), "Failed to read output from grub2-set-default")?;
-
-            log::debug!(
-                "grub2-set-default stdout: {}",
-                String::from_utf8_lossy(&set_default.stdout)
-            );
-            log::debug!(
-                "grub2-mkconfig stderr: {}",
-                String::from_utf8_lossy(&set_default.stderr)
-            );
-
-            log::debug!("Calling grub2-set-default {kernel}, done");
-        } else {
-            log::debug!("Removing default seleceted kernel");
-
-            // grub2-editenv /boot/grub2/grubenv unset saved_entry
-            let edit_env = Command::new("grub2-editenv")
-                .arg("/boot/grub2/grubenv")
-                .arg("unset")
-                .arg("saved_entry")
-                .output()
-                .ctx(dctx!(), "Failed to read output from grub2-editenv")?;
-
-            log::debug!(
-                "grub2-edit-env stdout: {}",
-                String::from_utf8_lossy(&edit_env.stdout)
-            );
-            log::debug!(
-                "grub2-edit-env stderr: {}",
-                String::from_utf8_lossy(&edit_env.stderr)
-            );
-
-            log::debug!("Removing default seleceted kernel done");
-        }
         Ok(())
     }
 
@@ -232,7 +242,7 @@ impl DbusHandler {
             .ctx(dctx!(), "Cannot turn json into GrubLines")?;
 
         let mut grub_file = GrubFile::from_lines(&value_list);
-        self.set_grub_system(&mut grub_file, &config.selected_kernel)
+        self.set_grub_system(&mut grub_file, &config.selected_kernel, false)
             .await?;
 
         // if everything is okay, save the snapshot to a database
@@ -253,7 +263,7 @@ impl DbusHandler {
 
     async fn _get_grub2_boot_entries(&self) -> DResult<BootEntryData> {
         let grub_entries = GrubBootEntries::new().ctx(dctx!(), "Couldn't read kernel entries")?;
-        let entries = serde_json::to_value(grub_entries.entries())
+        let entries = serde_json::to_value(grub_entries.entry_names())
             .ctx(dctx!(), "Cannot trun grub kernel entries into json")?;
         let selected_kernel = serde_json::to_value(grub_entries.selected())
             .ctx(dctx!(), "Cannot trun grub kernel entries into json")?;
@@ -366,7 +376,7 @@ impl DbusHandler {
 
         let snapshot = self.db.grub2_snapshot(select_data.snapshot_id).await?;
         let mut grub_file = GrubFile::new(&snapshot.grub_config)?;
-        self.set_grub_system(&mut grub_file, &snapshot.selected_kernel)
+        self.set_grub_system(&mut grub_file, &snapshot.selected_kernel, true)
             .await?;
         self.db
             .set_selected_snapshot(Some(select_data.snapshot_id))

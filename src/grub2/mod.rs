@@ -197,9 +197,72 @@ enum GrubEnvValue<'a> {
     Name(&'a str),
 }
 
+#[derive(Debug, Clone)]
+pub struct GrubBootEntry {
+    /// The actual name of the entry
+    entry: String,
+    /// (nested) submenus
+    submenus: Vec<String>,
+}
+
+impl GrubBootEntry {
+    fn new(entry: String, submenus: Vec<String>) -> Self {
+        Self { entry, submenus }
+    }
+
+    fn parse_entries(contents: &str) -> DResult<Vec<GrubBootEntry>> {
+        let mut entries = Vec::new();
+        let mut submenus = Vec::new();
+        // these are unrecovable error so panic is appropriate
+        let entry_re = Regex::new(r"menuentry\s+'([^']+)").expect("Invalid regex");
+        let submenu_re = Regex::new(r"submenu\s+'([^']+)").expect("Invalid regex");
+
+        let mut menuentry_open = false;
+        for line in contents.lines() {
+            let line = line.trim();
+            if line.starts_with('}') {
+                if menuentry_open {
+                    menuentry_open = false;
+                } else {
+                    submenus.pop();
+                }
+
+                continue;
+            }
+
+            if line.starts_with("menuentry") {
+                menuentry_open = true;
+                // TODO: error if this fails
+                entry_re.captures(line).map(|capture| {
+                    entries.push(Self::new(capture[1].to_string(), submenus.clone()))
+                });
+            } else if line.starts_with("submenu") {
+                // TODO: error if this fails
+                submenu_re
+                    .captures(line)
+                    .map(|capture| submenus.push(capture[1].to_string()));
+            }
+        }
+
+        Ok(entries)
+    }
+
+    pub fn entry(&self) -> &str {
+        &self.entry
+    }
+
+    pub fn full_path(&self) -> String {
+        if self.submenus.is_empty() {
+            self.entry.clone()
+        } else {
+            format!("{}>{}", self.submenus.join(">"), self.entry)
+        }
+    }
+}
+
 pub struct GrubBootEntries {
-    entries: Vec<String>,
-    selected: Option<String>,
+    entries: Vec<GrubBootEntry>,
+    selected: Option<GrubBootEntry>,
 }
 
 impl GrubBootEntries {
@@ -207,12 +270,7 @@ impl GrubBootEntries {
         log::debug!("Reading kenrnel boot entries from /boot/grub2/grub.cfg");
         let contents = read_to_string("/boot/grub2/grub.cfg")
             .ctx(dctx!(), "Cannot read /boot/grub2/grub.cfg")?;
-        // this is unrecovable error so panic is appropriate
-        let re = Regex::new(r"menuentry\s+'([^']+)").expect("Invalid regex");
-        let entries: Vec<String> = re
-            .captures_iter(&contents)
-            .map(|capture| capture[1].to_string())
-            .collect();
+        let entries = GrubBootEntry::parse_entries(&contents)?;
 
         log::debug!("Reading default boot entry from /boot/grub2/grubenv");
         let contents = read_to_string("/boot/grub2/grubenv")
@@ -249,7 +307,9 @@ impl GrubBootEntries {
         let selected = if let Some(value) = selected_idx {
             match value? {
                 GrubEnvValue::Index(idx) => entries.get(idx).cloned(),
-                GrubEnvValue::Name(name) => entries.iter().find(|entry| *entry == name).cloned(),
+                GrubEnvValue::Name(name) => {
+                    entries.iter().find(|entry| entry.entry() == name).cloned()
+                }
             }
         } else {
             log::debug!("No default kernel entry selected, defaulting to first available kernel");
@@ -259,11 +319,20 @@ impl GrubBootEntries {
         Ok(Self { entries, selected })
     }
 
-    pub fn entries(&self) -> &[String] {
+    pub fn entry_names(&self) -> Vec<&str> {
+        self.entries.iter().map(|entry| entry.entry()).collect()
+    }
+
+    pub fn entries(&self) -> &[GrubBootEntry] {
+        // self.entries.iter().map(|entry| entry.entry()).collect()
         &self.entries
     }
 
     pub fn selected(&self) -> Option<&str> {
-        self.selected.as_deref()
+        if let Some(selected) = &self.selected {
+            Some(selected.entry())
+        } else {
+            None
+        }
     }
 }
