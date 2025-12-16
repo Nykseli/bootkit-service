@@ -62,7 +62,7 @@ pub struct DError {
 
 impl DError {
     pub fn new(ctx: DCtx, error: DErrorType) -> Self {
-        log::debug!("Error at {ctx}: {error}");
+        log::error!("Error at {ctx}: {error}");
         Self {
             ctx,
             error,
