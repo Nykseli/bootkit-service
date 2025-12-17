@@ -1,7 +1,9 @@
 use std::str::FromStr;
 
 use tracing::level_filters::LevelFilter;
-use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt, Layer};
+use tracing_subscriber::{
+    filter::Targets, fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer,
+};
 
 use crate::config::{ConfigArgs, DEFAULT_LOG_LEVEL};
 
@@ -36,7 +38,19 @@ pub fn setup_logging(args: &ConfigArgs) {
         filter
     };
 
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_filter(filter))
-        .init();
+    let subscriber = tracing_subscriber::registry();
+    // the different fmt::layer makes subscriber type very unhappy
+    // so we need to have separate init calls
+    if !args.pretty {
+        subscriber
+            .with(
+                fmt::layer()
+                    .without_time()
+                    .with_ansi(false)
+                    .with_filter(filter),
+            )
+            .init()
+    } else {
+        subscriber.with(fmt::layer().with_filter(filter)).init()
+    }
 }

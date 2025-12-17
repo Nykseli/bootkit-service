@@ -12,6 +12,10 @@ pub struct ConfigArgs {
     /// Possible values: "error", "warn", "info", "debug", "trace", or a number 1-5
     #[arg(short, long)]
     pub log_level: Option<tracing::Level>,
+
+    /// Print pretty logging output that includes colors and timestamps
+    #[arg(short, long, default_value_t = false)]
+    pub pretty: bool,
 }
 
 #[cfg(not(feature = "dev"))]
