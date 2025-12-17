@@ -21,17 +21,18 @@ pub async fn listen_files(connection: &Connection) -> zbus::Result<()> {
         // prevent duplicate modify event triggers
         let mut signaled = false;
         for event in events {
-            if event.mask.contains(EventMask::MODIFY) && !signaled {
-                if event.name.is_some_and(|name| name == "grub") {
-                    signaled = true;
-                    connection
-                        .object_server()
-                        .interface("/org/opensuse/bootkit")
-                        .await?
-                        .file_changed()
-                        .await?;
-                    log::debug!("{GRUB_ROOT_PATH} contents was modified. Signaling dbus");
-                }
+            if event.mask.contains(EventMask::MODIFY)
+                && !signaled
+                && event.name.is_some_and(|name| name == "grub")
+            {
+                signaled = true;
+                connection
+                    .object_server()
+                    .interface("/org/opensuse/bootkit")
+                    .await?
+                    .file_changed()
+                    .await?;
+                log::debug!("{GRUB_ROOT_PATH} contents was modified. Signaling dbus");
             }
         }
     }

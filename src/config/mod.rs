@@ -19,19 +19,19 @@ pub struct ConfigArgs {
 }
 
 #[cfg(not(feature = "dev"))]
-pub const GRUB_FILE_PATH: &'static str = "/etc/default/grub";
+pub const GRUB_FILE_PATH: &str = "/etc/default/grub";
 #[cfg(feature = "dev")]
-pub const GRUB_FILE_PATH: &'static str = "tmp/grub";
+pub const GRUB_FILE_PATH: &str = "tmp/grub";
 
 #[cfg(not(feature = "dev"))]
-pub const GRUB_ROOT_PATH: &'static str = "/etc/default";
+pub const GRUB_ROOT_PATH: &str = "/etc/default";
 #[cfg(feature = "dev")]
-pub const GRUB_ROOT_PATH: &'static str = "tmp";
+pub const GRUB_ROOT_PATH: &str = "tmp";
 
 #[cfg(not(feature = "dev"))]
-pub const DATABASE_PATH: &'static str = "/var/lib/bootkit/bootkit.db";
+pub const DATABASE_PATH: &str = "/var/lib/bootkit/bootkit.db";
 #[cfg(feature = "dev")]
-pub const DATABASE_PATH: &'static str = "tmp/bootkit.db";
+pub const DATABASE_PATH: &str = "tmp/bootkit.db";
 
 #[cfg(not(feature = "dev"))]
 pub const DEFAULT_LOG_LEVEL: tracing::Level = tracing::Level::INFO;

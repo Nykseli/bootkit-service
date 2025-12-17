@@ -53,7 +53,7 @@ impl KeyValue {
             ));
         };
         self.key = split.0.into();
-        self.value = split.1.replace('\'', "").replace('"', "").into();
+        self.value = split.1.replace(['\'', '"'], "");
 
         Ok(())
     }
@@ -184,7 +184,7 @@ impl GrubFile {
     }
 
     pub fn as_string(&self) -> String {
-        let lines: Vec<String> = self.lines().into_iter().map(|val| val.into()).collect();
+        let lines: Vec<String> = self.lines().iter().map(|val| val.into()).collect();
         lines.join("\n")
     }
 }
@@ -233,14 +233,14 @@ impl GrubBootEntry {
             if line.starts_with("menuentry") {
                 menuentry_open = true;
                 // TODO: error if this fails
-                entry_re.captures(line).map(|capture| {
+                if let Some(capture) = entry_re.captures(line) {
                     entries.push(Self::new(capture[1].to_string(), submenus.clone()))
-                });
+                }
             } else if line.starts_with("submenu") {
                 // TODO: error if this fails
-                submenu_re
-                    .captures(line)
-                    .map(|capture| submenus.push(capture[1].to_string()));
+                if let Some(capture) = submenu_re.captures(line) {
+                    submenus.push(capture[1].to_string())
+                }
             }
         }
 
