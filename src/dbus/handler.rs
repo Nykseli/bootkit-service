@@ -12,34 +12,6 @@ use crate::{
     grub2::{GrubBootEntries, GrubFile, GrubLine},
 };
 
-/// Dbus response structure. Set err to NULL when ok, and ok to NULL when err
-#[derive(Debug, Clone, Serialize)]
-struct DbusResponse {
-    // TODO: make into enum?
-    ok: Value,
-    err: Value,
-}
-
-impl DbusResponse {
-    fn as_string(&self) -> String {
-        serde_json::to_string(self).expect("Unexpected internal JSON parse error")
-    }
-}
-
-impl<T: Serialize> From<DResult<T>> for DbusResponse {
-    fn from(value: DResult<T>) -> Self {
-        let (ok, err) = match value {
-            Ok(value) => (
-                serde_json::to_value(value).expect("Unexpected internal JSON parse error"),
-                Value::Null,
-            ),
-            Err(err) => (Value::Null, Value::String(err.error().as_string())),
-        };
-
-        Self { ok, err }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ConfigData {
     value_map: Value,
@@ -230,12 +202,12 @@ impl DbusHandler {
     }
 
     /// Get grub config config (or the relevant error) that can be safely sent via dbus
-    pub async fn get_grub2_config_json(&self) -> String {
-        let data: DbusResponse = self._get_grub2_config().await.into();
-        data.as_string()
+    pub async fn get_grub2_config_json(&self) -> DResult<String> {
+        let data = self._get_grub2_config().await?;
+        serde_json::to_string(&data).ctx(dctx!(), "Failed to serialize grub2 config")
     }
 
-    async fn _save_grub2_config(&self, data: &str) -> DResult<String> {
+    pub async fn save_grub2_config(&self, data: &str) -> DResult<String> {
         let config: ConfigData = serde_json::from_str(data)
             .ctx(dctx!(), "Malformed JSON data received from the client")?;
         let value_list: Vec<GrubLine> = serde_json::from_value(config.value_list)
@@ -255,12 +227,6 @@ impl DbusHandler {
         Ok("ok".into())
     }
 
-    /// Save grub config as a snapshot to db
-    pub async fn save_grub2_config(&self, data: &str) -> String {
-        let data: DbusResponse = self._save_grub2_config(data).await.into();
-        data.as_string()
-    }
-
     async fn _get_grub2_boot_entries(&self) -> DResult<BootEntryData> {
         let grub_entries = GrubBootEntries::new().ctx(dctx!(), "Couldn't read kernel entries")?;
         let entries = serde_json::to_value(grub_entries.entry_names())
@@ -275,9 +241,9 @@ impl DbusHandler {
     }
 
     /// Get grub2 boot entries that can be safely sent via dbus
-    pub async fn get_grub2_boot_entries(&self) -> String {
-        let data: DbusResponse = self._get_grub2_boot_entries().await.into();
-        data.as_string()
+    pub async fn get_grub2_boot_entries_json(&self) -> DResult<String> {
+        let data = self._get_grub2_boot_entries().await?;
+        serde_json::to_string(&data).ctx(dctx!(), "Failed to serialize grub2 bootentries")
     }
 
     /// Get snapshots that can be safely sent via dbus
@@ -310,12 +276,12 @@ impl DbusHandler {
     }
 
     /// Get snapshots that can be safely sent via dbus
-    pub async fn get_snapshots(&self) -> String {
-        let data: DbusResponse = self._get_snapshots().await.into();
-        data.as_string()
+    pub async fn get_snapshots_json(&self) -> DResult<String> {
+        let data = self._get_snapshots().await?;
+        serde_json::to_string(&data).ctx(dctx!(), "Failed to serialize snapshots")
     }
 
-    async fn _remove_snapshot(&self, data: &str) -> DResult<String> {
+    pub async fn remove_snapshot(&self, data: &str) -> DResult<String> {
         let rm_data: RemoveSnapshotData =
             serde_json::from_str(data).ctx(dctx!(), "Malformed JSON data received from client")?;
 
@@ -345,12 +311,7 @@ impl DbusHandler {
         Ok("ok".into())
     }
 
-    pub async fn remove_snapshot(&self, data: &str) -> String {
-        let data: DbusResponse = self._remove_snapshot(data).await.into();
-        data.as_string()
-    }
-
-    async fn _select_snapshot(&self, data: &str) -> DResult<String> {
+    pub async fn select_snapshot(&self, data: &str) -> DResult<String> {
         let select_data: SelectSnapshotData =
             serde_json::from_str(data).ctx(dctx!(), "Malformed JSON data received from client")?;
 
@@ -388,10 +349,5 @@ impl DbusHandler {
         );
 
         Ok("ok".into())
-    }
-
-    pub async fn select_snapshot(&self, data: &str) -> String {
-        let data: DbusResponse = self._select_snapshot(data).await.into();
-        data.as_string()
     }
 }

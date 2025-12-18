@@ -90,6 +90,12 @@ impl DError {
     }
 }
 
+impl From<DError> for zbus::fdo::Error {
+    fn from(value: DError) -> Self {
+        Self::Failed(value.error().as_string())
+    }
+}
+
 pub type DResult<T> = core::result::Result<T, DError>;
 
 pub trait DRes<T> {
