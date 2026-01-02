@@ -1,8 +1,9 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs::read_to_string, path::Path};
+use std::{collections::HashMap, fmt::Display, fs::read_to_string, path::Path};
 
 use crate::{
+    config::{GRUB_CFG_PATH, GRUB_ENV_PATH},
     dctx,
     errors::{DError, DRes, DResult},
 };
@@ -281,13 +282,13 @@ pub struct GrubBootEntries {
 
 impl GrubBootEntries {
     pub fn new() -> DResult<Self> {
-        log::debug!("Reading kenrnel boot entries from /boot/grub2/grub.cfg");
-        let config = read_to_string("/boot/grub2/grub.cfg")
-            .ctx(dctx!(), "Cannot read /boot/grub2/grub.cfg")?;
+        log::debug!("Reading kenrnel boot entries from {GRUB_CFG_PATH}");
+        let config =
+            read_to_string(GRUB_CFG_PATH).ctx(dctx!(), format!("Cannot read {GRUB_CFG_PATH}"))?;
 
-        log::debug!("Reading default boot entry from /boot/grub2/grubenv");
-        let grub_env = read_to_string("/boot/grub2/grubenv")
-            .ctx(dctx!(), "Cannot read /boot/grub2/grubenv")?;
+        log::debug!("Reading default boot entry from {GRUB_ENV_PATH}");
+        let grub_env =
+            read_to_string(GRUB_ENV_PATH).ctx(dctx!(), format!("Cannot read {GRUB_ENV_PATH}"))?;
 
         Self::from_contents(&config, &grub_env)
     }

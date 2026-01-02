@@ -29,6 +29,16 @@ pub const GRUB_ROOT_PATH: &str = "/etc/default";
 pub const GRUB_ROOT_PATH: &str = "tmp";
 
 #[cfg(not(feature = "dev"))]
+pub const GRUB_ENV_PATH: &str = "/boot/grub2/grubenv";
+#[cfg(feature = "dev")]
+pub const GRUB_ENV_PATH: &str = "tmp/grubenv";
+
+#[cfg(not(feature = "dev"))]
+pub const GRUB_CFG_PATH: &str = "/boot/grub2/grub.cfg";
+#[cfg(feature = "dev")]
+pub const GRUB_CFG_PATH: &str = "tmp/grub.cfg";
+
+#[cfg(not(feature = "dev"))]
 pub const DATABASE_PATH: &str = "/var/lib/bootkit/bootkit.db";
 #[cfg(feature = "dev")]
 pub const DATABASE_PATH: &str = "tmp/bootkit.db";
