@@ -192,12 +192,22 @@ impl GrubFile {
     }
 }
 
+#[derive(Debug)]
 enum GrubEnvValue<'a> {
     /// Index of the bootentry
     Index(usize),
     /// Name of the bootentry
     // Name(String),
     Name(&'a str),
+}
+
+impl Display for GrubEnvValue<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GrubEnvValue::Index(idx) => write!(f, "{idx}"),
+            GrubEnvValue::Name(name) => write!(f, "{name}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -314,12 +324,20 @@ impl GrubBootEntries {
             });
 
         let selected = if let Some(value) = selected_idx {
-            match value? {
+            let value = value?;
+            let entry = match value {
                 GrubEnvValue::Index(idx) => entries.get(idx).cloned(),
-                GrubEnvValue::Name(name) => {
-                    entries.iter().find(|entry| entry.entry() == name).cloned()
-                }
+                GrubEnvValue::Name(name) => entries
+                    .iter()
+                    .find(|entry| entry.full_path() == name)
+                    .cloned(),
+            };
+
+            if entry.is_none() {
+                log::warn!("Saved kernel '{value}' was defined as saved_entry but not found in grub. Assuming default kernel.");
             }
+
+            entry
         } else {
             log::debug!("No default kernel entry selected, defaulting to first available kernel");
             None
