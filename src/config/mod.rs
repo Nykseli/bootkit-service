@@ -113,16 +113,24 @@ pub struct ConfigArgs {
     /// Possible unit values (case insensitive): s, sec, second, m, min, minute, h, hour
     #[arg(short, long)]
     idle_time: Option<TimeConfig>,
+
+    /// Allow program to idle indefinitely. Overrides idle_time argument
+    #[arg(long, default_value_t = false)]
+    allow_idle: bool,
 }
 
 impl ConfigArgs {
-    /// Configured allowed idle time in milliseconds
-    pub fn allowed_idle_time(&self) -> u64 {
-        if let Some(time) = self.idle_time {
-            time.milliseconds
+    /// Configured allowed idle time in milliseconds, or none if
+    /// program is allowed to idle indefinitely
+    pub fn allowed_idle_time(&self) -> Option<u64> {
+        if self.allow_idle {
+            None
         } else {
-            // 5 minutes in milliseconds
-            5 * 60 * 1000
+            // defaults 5 minutes in milliseconds
+            Some(
+                self.idle_time
+                    .map_or(5 * 60 * 1000, |time| time.milliseconds),
+            )
         }
     }
 }

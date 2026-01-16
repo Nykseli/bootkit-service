@@ -93,9 +93,16 @@ impl BootkitEvents {
         })
     }
 
-    fn detect_idle_connection(&self, timeout: u64) -> EventHandle<()> {
+    fn detect_idle_connection(&self, timeout: Option<u64>) -> EventHandle<()> {
         let copy = self.clone();
         tokio::spawn(async move {
+            // if timeout is not defined, there's no need to run the idle connection
+            let timeout = if let Some(timeout) = timeout {
+                timeout
+            } else {
+                return Ok(());
+            };
+
             let mut counter = 0;
 
             while counter < timeout && !copy.shutdown.load(Ordering::Relaxed) {
@@ -123,7 +130,7 @@ impl BootkitEvents {
            res = file_changes => {
                res.ctx(dctx!(), "File change detection panicked")
            }
-           res = idle_connection=> {
+           res = idle_connection, if config.allowed_idle_time().is_some() => {
                res.ctx(dctx!(), "Idle detection panicked")
            }
         };
