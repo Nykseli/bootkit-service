@@ -13,7 +13,7 @@ use tokio::task::JoinHandle;
 use zbus::Connection;
 
 use crate::{
-    config::{ConfigArgs, GRUB_ROOT_PATH},
+    config::{ConfigArgs, GRUB_BOOT_PATH, GRUB_ENV_PATH, GRUB_ROOT_PATH},
     dbus::connection::BootKitConfigSignals,
     dctx,
     errors::{DRes, DResult},
@@ -46,10 +46,15 @@ impl BootkitEvents {
 
     async fn listen_files_loop(&self) -> zbus::Result<()> {
         let mut inotify = Inotify::init().expect("Failed to initialize inotify");
+
         inotify
             .watches()
             .add(GRUB_ROOT_PATH, WatchMask::MODIFY)
             .expect("Failed to watch /etc/default/grub");
+        inotify
+            .watches()
+            .add(GRUB_BOOT_PATH, WatchMask::MODIFY)
+            .expect("Failed to watch /boot/grub2");
 
         log::info!("Listening to config changes");
 
@@ -67,7 +72,9 @@ impl BootkitEvents {
             for event in events {
                 if event.mask.contains(EventMask::MODIFY)
                     && !signaled
-                    && event.name.is_some_and(|name| name == "grub")
+                    && event
+                        .name
+                        .is_some_and(|name| name == "grub" || name == "grubenv")
                 {
                     signaled = true;
                     self.connection
@@ -76,7 +83,23 @@ impl BootkitEvents {
                         .await?
                         .file_changed()
                         .await?;
-                    log::debug!("{GRUB_ROOT_PATH} contents was modified. Signaling dbus");
+
+                    if let Some(event_name) = event.name {
+                        match event_name
+                            .to_str()
+                            .expect("Failed to convert event_name to str")
+                        {
+                            "grub" => {
+                                log::debug!(
+                                    "{GRUB_ROOT_PATH} contents was modified. Signaling dbus"
+                                )
+                            }
+                            "grubenv" => {
+                                log::debug!("{GRUB_ENV_PATH} contents was modified. Signaling dbus")
+                            }
+                            _ => {}
+                        }
+                    }
                 }
             }
         }

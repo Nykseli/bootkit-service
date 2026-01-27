@@ -151,6 +151,11 @@ pub const GRUB_ENV_PATH: &str = "/boot/grub2/grubenv";
 pub const GRUB_ENV_PATH: &str = "tmp/grubenv";
 
 #[cfg(not(feature = "dev"))]
+pub const GRUB_BOOT_PATH: &str = "/boot/grub2";
+#[cfg(feature = "dev")]
+pub const GRUB_BOOT_PATH: &str = "tmp";
+
+#[cfg(not(feature = "dev"))]
 pub const GRUB_CFG_PATH: &str = "/boot/grub2/grub.cfg";
 #[cfg(feature = "dev")]
 pub const GRUB_CFG_PATH: &str = "tmp/grub.cfg";
