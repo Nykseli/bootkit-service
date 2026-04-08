@@ -35,6 +35,12 @@ impl BootKitSnapshots {
         let data = self.handler.select_snapshot(data).await?;
         Ok(data)
     }
+
+    async fn use_current_snapshot(&self) -> Result<String, fdo::Error> {
+        log::debug!("Calling org.opensuse.bootkit.Snapshot UseCurrentSnapshot");
+        let data = self.handler.use_current_snapshot().await?;
+        Ok(data)
+    }
 }
 
 pub struct BootKitConfig {
