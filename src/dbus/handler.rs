@@ -350,4 +350,26 @@ impl DbusHandler {
 
         Ok("ok".into())
     }
+
+    pub async fn use_current_snapshot(&self) -> DResult<String> {
+        log::debug!("Trying to reuse current snapshot");
+
+        let selected_snapshot = self.db.selected_snapshot().await?;
+        let current_snapshot = if let Some(id) = selected_snapshot.grub2_snapshot_id {
+            self.db.grub2_snapshot(id).await?
+        } else {
+            self.db.latest_grub2().await?
+        };
+
+        let mut grub_file = GrubFile::new(&current_snapshot.grub_config)?;
+        self.set_grub_system(&mut grub_file, &current_snapshot.selected_kernel, true)
+            .await?;
+
+        log::debug!(
+            "Succesfully reused current snapshot with id {}",
+            current_snapshot.id
+        );
+
+        Ok("ok".into())
+    }
 }
