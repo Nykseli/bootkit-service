@@ -10,6 +10,12 @@ impl BootKitInfo {
         log::debug!("Calling org.opensuse.bootkit.Info GetVersion");
         Ok(env!("CARGO_PKG_VERSION").into())
     }
+
+    /// For keeping the service alive
+    async fn ping(&self) -> &'static str {
+        log::trace!("Calling org.opensuse.bootkit.Info Ping");
+        "pong"
+    }
 }
 
 pub struct BootKitSnapshots {
