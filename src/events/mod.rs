@@ -61,7 +61,7 @@ impl BootkitEvents {
         while !self.shutdown.load(Ordering::Relaxed) {
             let mut buffer = [0; 4096];
 
-            let events = match inotify.read_events(&mut buffer) {
+            let events = match inotify.read_events_blocking(&mut buffer) {
                 Ok(events) => events,
                 Err(error) if error.kind() == ErrorKind::WouldBlock => continue,
                 Err(err) => panic!("Error while reading events: {err}"),
