@@ -28,6 +28,7 @@ pub enum DErrorType {
     Zbus(String, Box<zbus::Error>),
     Serde(String, Box<serde_json::Error>),
     JoinError(String, Box<tokio::task::JoinError>),
+    ThreadError(String, Box<dyn std::any::Any + Send + 'static>),
 }
 
 impl DErrorType {
@@ -42,6 +43,7 @@ impl DErrorType {
             DErrorType::Zbus(msg, error) => format!("Internal zbus error: {msg} ({error})"),
             DErrorType::Serde(msg, error) => format!("Json handling error: {msg} ({error})"),
             DErrorType::JoinError(msg, error) => format!("Task runtime error: {msg} ({error})"),
+            DErrorType::ThreadError(msg, error) => format!("Thread error: {msg} ({error:?})"),
         }
     }
 }
@@ -162,6 +164,18 @@ impl<T> DRes<T> for serde_json::Result<T> {
             Err(err) => Err(DError::new(
                 ctx,
                 DErrorType::Serde(msg.into(), Box::new(err)),
+            )),
+        }
+    }
+}
+
+impl<T> DRes<T> for std::thread::Result<T> {
+    fn ctx<M: Into<String>>(self, ctx: DCtx, msg: M) -> DResult<T> {
+        match self {
+            Ok(value) => Ok(value),
+            Err(err) => Err(DError::new(
+                ctx,
+                DErrorType::ThreadError(msg.into(), Box::new(err)),
             )),
         }
     }

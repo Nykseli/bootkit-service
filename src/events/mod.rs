@@ -4,12 +4,12 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    thread::{self, JoinHandle},
     time::Duration,
 };
 
 use event_listener::Listener;
 use inotify::{EventMask, Inotify, WatchMask};
-use tokio::task::JoinHandle;
 use zbus::Connection;
 
 use crate::{
@@ -109,16 +109,24 @@ impl BootkitEvents {
 
     fn listen_files(&self) -> EventHandle<()> {
         let copy = self.clone();
-        tokio::spawn(async move {
-            copy.listen_files_loop()
-                .await
-                .ctx(dctx!(), "Failed to listen file events")
+        thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .worker_threads(1)
+                .build()
+                .unwrap();
+
+            rt.block_on(async {
+                copy.listen_files_loop()
+                    .await
+                    .ctx(dctx!(), "Failed to listen file events")
+            })
         })
     }
 
     fn detect_idle_connection(&self, timeout: Option<u64>) -> EventHandle<()> {
         let copy = self.clone();
-        tokio::spawn(async move {
+        thread::spawn(move || {
             // if timeout is not defined, there's no need to run the idle connection
             let timeout = if let Some(timeout) = timeout {
                 timeout
@@ -149,15 +157,18 @@ impl BootkitEvents {
     pub async fn listen_events(&self, config: &ConfigArgs) -> DResult<()> {
         let file_changes = self.listen_files();
         let idle_connection = self.detect_idle_connection(config.allowed_idle_time());
-        let res = tokio::select! {
-           res = file_changes => {
-               res.ctx(dctx!(), "File change detection panicked")
-           }
-           res = idle_connection, if config.allowed_idle_time().is_some() => {
-               res.ctx(dctx!(), "Idle detection panicked")
-           }
-        };
-
-        res?
+        loop {
+            if file_changes.is_finished() {
+                return file_changes
+                    .join()
+                    .ctx(dctx!(), "File change detection panicked")?;
+            }
+            if idle_connection.is_finished() {
+                return idle_connection
+                    .join()
+                    .ctx(dctx!(), "Idle detection panicked")?;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
     }
 }
