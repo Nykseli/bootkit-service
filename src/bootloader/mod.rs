@@ -8,6 +8,9 @@ use crate::{
     errors::{DError, DRes, DResult},
 };
 
+pub mod parser;
+pub mod systemd_boot;
+
 static BOOTLOADER_TYPE: OnceLock<BootloaderType> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy)]
