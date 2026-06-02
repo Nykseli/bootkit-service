@@ -3,7 +3,8 @@ use serde::Serialize;
 use sqlx::{Pool, Sqlite};
 
 use crate::{
-    config::DATABASE_PATH,
+    bootloader::systemd_boot::loader_config::LoaderConfigFile,
+    config::{DATABASE_PATH, SYSTEMD_CFG_PATH},
     dctx,
     errors::{DRes, DResult},
 };
@@ -42,8 +43,20 @@ pub async fn initialize_systemd_boot(pool: &Pool<Sqlite>) -> DResult<()> {
         .ctx(dctx!(), "Cannot get count from systemd_boot_snapshot")?;
 
     if snapshot_count.count == 0 {
-        // TODO: save entry
         log::debug!("systemd_boot_snapshot table is empty. Setting first entry");
+        let config = LoaderConfigFile::from_file(SYSTEMD_CFG_PATH)
+            .ctx(dctx!(), "Failed to parse systemd config")?;
+        if cfg!(feature = "dev") {
+            log::debug!("Setting initial snapshot without selected kernel");
+            save_systemd_boot(pool, &config, None::<&str>)
+                .await
+                .ctx(dctx!(), "Failed to save systemd-boot enry")?;
+        } else {
+            log::warn!("Setting selected bootentry for systemd-boot is not supported yet");
+            save_systemd_boot(pool, &config, None::<&str>)
+                .await
+                .ctx(dctx!(), "Failed to save systemd-boot enry")?;
+        }
     }
 
     let grub_table = sqlx::query!(
@@ -61,5 +74,29 @@ pub async fn initialize_systemd_boot(pool: &Pool<Sqlite>) -> DResult<()> {
     }
 
     log::info!("Initialised database at {DATABASE_PATH}");
+    Ok(())
+}
+
+pub async fn save_systemd_boot<K: Into<String>>(
+    pool: &Pool<Sqlite>,
+    conf: &LoaderConfigFile,
+    selected_kernel: Option<K>,
+) -> DResult<()> {
+    let selected_kernel: Option<String> = selected_kernel.map(K::into);
+    let grub_file = conf.as_string();
+
+    sqlx::query!(
+        "INSERT INTO systemd_boot_snapshot (loader_config, selected_kernel) VALUES (?, ?)",
+        grub_file,
+        selected_kernel,
+    )
+    .execute(pool)
+    .await
+    .ctx(
+        dctx!(),
+        "Cannot insert new entry to systemd_boot_snapshot table",
+    )?;
+
+    log::debug!("New systemd-boot config snapshot inserted to systemd_boot_snapshot table");
     Ok(())
 }
