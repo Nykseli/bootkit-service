@@ -5,14 +5,18 @@ use sqlx::{sqlite::SqlitePoolOptions, Error, Pool, Sqlite};
 use crate::{
     bootloader::BootloaderType,
     config::{DATABASE_PATH, GRUB_FILE_PATH},
-    db::{grub2::Grub2Snapshot, selected_snapshot::SelectedSnapshot},
+    db::{
+        grub2::Grub2Snapshot, selected_snapshot::SelectedSnapshot,
+        systemd_boot::initialize_systemd_boot,
+    },
     dctx,
-    errors::{DError, DRes, DResult},
+    errors::{DRes, DResult},
     grub2::{GrubBootEntries, GrubFile},
 };
 
 pub mod grub2;
 pub mod selected_snapshot;
+pub mod systemd_boot;
 
 #[derive(Clone)]
 pub struct Database {
@@ -49,9 +53,9 @@ impl Database {
                 .initialize_grub()
                 .await
                 .ctx(dctx!(), "Grub db initialization failed"),
-            BootloaderType::SystemdBoot => {
-                Err(DError::generic(dctx!(), "systemd-boot is not supported"))
-            }
+            BootloaderType::SystemdBoot => initialize_systemd_boot(&self.pool)
+                .await
+                .ctx(dctx!(), "Systemd boot db initialization failed"),
         }
     }
 
