@@ -124,6 +124,15 @@ impl<T> DRes<T> for DResult<T> {
     }
 }
 
+impl<T> DRes<T> for core::option::Option<T> {
+    fn ctx<M: Into<String>>(self, ctx: DCtx, msg: M) -> DResult<T> {
+        match self {
+            Some(value) => Ok(value),
+            None => Err(DError::generic(ctx, msg)),
+        }
+    }
+}
+
 impl<T> DRes<T> for std::io::Result<T> {
     fn ctx<M: Into<String>>(self, ctx: DCtx, msg: M) -> DResult<T> {
         match self {
