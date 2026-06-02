@@ -3,10 +3,11 @@ use std::{fs::File, path::Path};
 use sqlx::{sqlite::SqlitePoolOptions, Error, Pool, Sqlite};
 
 use crate::{
+    bootloader::BootloaderType,
     config::{DATABASE_PATH, GRUB_FILE_PATH},
     db::{grub2::Grub2Snapshot, selected_snapshot::SelectedSnapshot},
     dctx,
-    errors::{DRes, DResult},
+    errors::{DError, DRes, DResult},
     grub2::{GrubBootEntries, GrubFile},
 };
 
@@ -43,6 +44,18 @@ impl Database {
     }
 
     pub async fn initialize(&self) -> DResult<()> {
+        match BootloaderType::system_type() {
+            BootloaderType::Grub => self
+                .initialize_grub()
+                .await
+                .ctx(dctx!(), "Grub db initialization failed"),
+            BootloaderType::SystemdBoot => {
+                Err(DError::generic(dctx!(), "systemd-boot is not supported"))
+            }
+        }
+    }
+
+    async fn initialize_grub(&self) -> DResult<()> {
         let grub_table = sqlx::query!(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='grub2_snapshot'"
         )
