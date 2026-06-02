@@ -111,6 +111,20 @@ impl From<DError> for zbus::fdo::Error {
 
 pub type DResult<T> = core::result::Result<T, DError>;
 
+pub trait DResOption<T> {
+    fn flat_ctx<M: Into<String>>(self, ctx: DCtx, msg: M) -> DResult<T>;
+}
+
+impl<T> DResOption<T> for DResult<Option<T>> {
+    fn flat_ctx<M: Into<String>>(self, ctx: DCtx, msg: M) -> DResult<T> {
+        match self {
+            Ok(Some(value)) => Ok(value),
+            Ok(None) => Err(DError::generic(ctx, msg)),
+            Err(err) => Err(err.with_trace(ctx, msg)),
+        }
+    }
+}
+
 pub trait DRes<T> {
     fn ctx<M: Into<String>>(self, ctx: DCtx, msg: M) -> DResult<T>;
 }

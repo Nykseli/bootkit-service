@@ -3,7 +3,7 @@ use serde::Serialize;
 use sqlx::{Pool, Sqlite};
 
 use crate::{
-    bootloader::systemd_boot::loader_config::LoaderConfigFile,
+    bootloader::systemd_boot::{boot_entries::SystemdBootEntry, loader_config::LoaderConfigFile},
     config::{DATABASE_PATH, SYSTEMD_CFG_PATH},
     dctx,
     errors::{DRes, DResult},
@@ -52,8 +52,9 @@ pub async fn initialize_systemd_boot(pool: &Pool<Sqlite>) -> DResult<()> {
                 .await
                 .ctx(dctx!(), "Failed to save systemd-boot enry")?;
         } else {
-            log::warn!("Setting selected bootentry for systemd-boot is not supported yet");
-            save_systemd_boot(pool, &config, None::<&str>)
+            let entries = SystemdBootEntry::new()
+                .ctx(dctx!(), "Failed to get systemd-boot boot entry information")?;
+            save_systemd_boot(pool, &config, entries.selected)
                 .await
                 .ctx(dctx!(), "Failed to save systemd-boot enry")?;
         }
