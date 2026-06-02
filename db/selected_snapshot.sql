@@ -1,7 +1,7 @@
 CREATE TABLE selected_snapshot (
     -- Id of selected grub2 snapshot, null if none is selected.
     -- If none is selected, it implies that latest snapshot is being used.
-    grub2_snapshot_id INTEGER
+    grub2_snapshot_id INTEGER,
     -- Id of selected systemd_boot snapshot, null if none is selected.
     -- If none is selected, it implies that latest snapshot is being used.
     systemd_boot_snapshot_id INTEGER
