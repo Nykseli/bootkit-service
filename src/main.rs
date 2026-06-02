@@ -1,5 +1,6 @@
 use clap::Parser;
 
+mod bootloader;
 mod config;
 mod db;
 mod dbus;
@@ -9,6 +10,7 @@ mod grub2;
 mod logging;
 
 use crate::{
+    bootloader::{detect_bootloader, BootloaderType},
     config::ConfigArgs,
     db::Database,
     dbus::connection::create_connection,
@@ -24,8 +26,14 @@ async fn main() -> DResult<()> {
     setup_logging(&args)?;
     log::info!("Starting bootkit service");
 
+    let loader_type = detect_bootloader().ctx(dctx!(), "Detect bootloader failed")?;
+    BootloaderType::set_system_type(loader_type);
+    log::debug!("Bootloader type '{loader_type:?}' detected");
+
     let db = Database::new().await?;
-    db.initialize().await?;
+    db.initialize()
+        .await
+        .ctx(dctx!(), "Failed to initialize database")?;
 
     let connection = create_connection(&args, &db)
         .await
