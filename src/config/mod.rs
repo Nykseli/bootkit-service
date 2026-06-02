@@ -161,6 +161,16 @@ pub const GRUB_CFG_PATH: &str = "/boot/grub2/grub.cfg";
 pub const GRUB_CFG_PATH: &str = "tmp/grub.cfg";
 
 #[cfg(not(feature = "dev"))]
+pub const SYSTEMD_CFG_PATH: &str = "/boot/efi/loader/loader.conf";
+#[cfg(feature = "dev")]
+pub const SYSTEMD_CFG_PATH: &str = "tmp/systemd_loader.conf";
+
+#[cfg(not(feature = "dev"))]
+pub const SYSTEMD_CFG_ROOT: &str = "/boot/efi/loader/";
+#[cfg(feature = "dev")]
+pub const SYSTEMD_CFG_ROOT: &str = "tmp/";
+
+#[cfg(not(feature = "dev"))]
 pub const DATABASE_PATH: &str = "/var/lib/bootkit/bootkit.db";
 #[cfg(feature = "dev")]
 pub const DATABASE_PATH: &str = "tmp/bootkit.db";

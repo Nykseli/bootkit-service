@@ -13,7 +13,11 @@ use inotify::{EventMask, Inotify, WatchMask};
 use zbus::Connection;
 
 use crate::{
-    config::{ConfigArgs, GRUB_BOOT_PATH, GRUB_ENV_PATH, GRUB_ROOT_PATH},
+    bootloader::BootloaderType,
+    config::{
+        ConfigArgs, GRUB_BOOT_PATH, GRUB_ENV_PATH, GRUB_ROOT_PATH, SYSTEMD_CFG_PATH,
+        SYSTEMD_CFG_ROOT,
+    },
     dbus::connection::BootKitConfigSignals,
     dctx,
     errors::{DRes, DResult},
@@ -44,7 +48,7 @@ impl BootkitEvents {
         self.shutdown.store(true, Ordering::Relaxed);
     }
 
-    async fn listen_files_loop(&self) -> zbus::Result<()> {
+    async fn listen_grub_files_loop(&self) -> zbus::Result<()> {
         let mut inotify = Inotify::init().expect("Failed to initialize inotify");
 
         inotify
@@ -107,6 +111,48 @@ impl BootkitEvents {
         Ok(())
     }
 
+    async fn listen_systemd_files_loop(&self) -> zbus::Result<()> {
+        let mut inotify = Inotify::init().expect("Failed to initialize inotify");
+
+        inotify
+            .watches()
+            .add(SYSTEMD_CFG_ROOT, WatchMask::MODIFY)
+            .unwrap_or_else(|_| panic!("Failed to watch {SYSTEMD_CFG_ROOT}"));
+
+        log::info!("Listening to config changes");
+
+        while !self.shutdown.load(Ordering::Relaxed) {
+            let mut buffer = [0; 4096];
+
+            let events = match inotify.read_events_blocking(&mut buffer) {
+                Ok(events) => events,
+                Err(error) if error.kind() == ErrorKind::WouldBlock => continue,
+                Err(err) => panic!("Error while reading events: {err}"),
+            };
+
+            // prevent duplicate modify event triggers
+            let mut signaled = false;
+            for event in events {
+                if event.mask.contains(EventMask::MODIFY)
+                    && !signaled
+                    && event.name.is_some_and(|name| name == "loader.conf")
+                {
+                    signaled = true;
+                    self.connection
+                        .object_server()
+                        .interface("/org/opensuse/bootkit")
+                        .await?
+                        .file_changed()
+                        .await?;
+
+                    log::debug!("{SYSTEMD_CFG_PATH} contents was modified. Signaling dbus")
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     fn listen_files(&self) -> EventHandle<()> {
         let copy = self.clone();
         thread::spawn(move || {
@@ -117,9 +163,16 @@ impl BootkitEvents {
                 .unwrap();
 
             rt.block_on(async {
-                copy.listen_files_loop()
-                    .await
-                    .ctx(dctx!(), "Failed to listen file events")
+                match BootloaderType::system_type() {
+                    BootloaderType::Grub => copy
+                        .listen_grub_files_loop()
+                        .await
+                        .ctx(dctx!(), "Failed to listen grub file events"),
+                    BootloaderType::SystemdBoot => copy
+                        .listen_systemd_files_loop()
+                        .await
+                        .ctx(dctx!(), "Failed to listen systemd file events"),
+                }
             })
         })
     }
