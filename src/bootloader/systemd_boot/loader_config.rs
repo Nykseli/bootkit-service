@@ -84,6 +84,13 @@ impl LoaderConfigFile {
         &self.lines
     }
 
+    pub fn get_key_value(&self, key: &str) -> Option<&KeyValue> {
+        self.lines()
+            .iter()
+            .filter_map(FileLine::key_value)
+            .find(|kv| kv.key == key)
+    }
+
     pub fn as_string(&self) -> String {
         let lines: Vec<String> = self.lines().iter().map(format_config_line).collect();
         lines.join("\n")

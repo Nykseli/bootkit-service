@@ -2,6 +2,7 @@ use clap::Parser;
 
 mod bootloader;
 mod config;
+mod data;
 mod db;
 mod dbus;
 mod errors;

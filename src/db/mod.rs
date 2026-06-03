@@ -47,6 +47,10 @@ impl Database {
         Ok(Self { pool })
     }
 
+    pub fn pool(&self) -> &Pool<Sqlite> {
+        &self.pool
+    }
+
     pub async fn initialize(&self) -> DResult<()> {
         match BootloaderType::system_type() {
             BootloaderType::Grub => self
