@@ -23,7 +23,7 @@ pub struct BootkitBootEntries {
 pub struct BootkitConfig {
     pub timeout: Option<String>,
     pub boot_entries: BootkitBootEntries,
-    pub kernel_parameters: Option<String>,
+    pub kernel_arguments: Option<String>,
     // TODO: Raw config values for the specific bootloader
     // TODO: config diff map "filname" -> "diff data"
 }
