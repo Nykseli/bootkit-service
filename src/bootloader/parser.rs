@@ -36,3 +36,12 @@ pub enum FileLine {
     KeyValue(KeyValue),
     String { raw_line: String },
 }
+
+impl FileLine {
+    pub fn key_value(&self) -> Option<&KeyValue> {
+        match self {
+            FileLine::KeyValue(key_value) => Some(key_value),
+            _ => None,
+        }
+    }
+}

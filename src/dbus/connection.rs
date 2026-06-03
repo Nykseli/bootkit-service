@@ -1,6 +1,14 @@
 use zbus::{connection::Builder, fdo, interface, object_server::SignalEmitter, Connection};
 
-use crate::{config::ConfigArgs, db::Database, dbus::handler::DbusHandler};
+use crate::{
+    bootloader::{systemd_boot::data_handler::SystemdDataHandler, BootloaderType},
+    config::ConfigArgs,
+    data::BootkitDataHandler,
+    db::Database,
+    dbus::handler::DbusHandler,
+    dctx,
+    errors::DRes,
+};
 
 struct BootKitInfo {}
 
@@ -51,13 +59,27 @@ impl BootKitSnapshots {
 
 pub struct BootKitConfig {
     handler: DbusHandler,
+    systemd: SystemdDataHandler,
 }
 
 #[interface(name = "org.opensuse.bootkit.Config")]
 impl BootKitConfig {
     async fn get_config(&self) -> Result<String, fdo::Error> {
         log::debug!("Calling org.opensuse.bootkit.Config GetConfig");
-        let data = self.handler.get_grub2_config_json().await?;
+        let data = match BootloaderType::system_type() {
+            BootloaderType::Grub => self.handler.get_grub2_config_json().await?,
+            BootloaderType::SystemdBoot => {
+                let config = self
+                    .systemd
+                    .get_config()
+                    .await
+                    .ctx(dctx!(), "Failed to get systemd-boot config")?;
+                config
+                    .serialize()
+                    .ctx(dctx!(), "Failed to to serialize systemd-boot config")?
+            }
+        };
+
         Ok(data)
     }
 
@@ -89,6 +111,7 @@ pub async fn create_connection(args: &ConfigArgs, db: &Database) -> zbus::Result
     let handler = DbusHandler::new(db.clone());
     let config = BootKitConfig {
         handler: handler.clone(),
+        systemd: SystemdDataHandler::new(db.pool().clone()),
     };
     let snapshots = BootKitSnapshots {
         handler: handler.clone(),

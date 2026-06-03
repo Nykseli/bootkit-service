@@ -22,6 +22,32 @@ pub struct SystemdBootSnapshot {
     pub created: NaiveDateTime,
 }
 
+#[derive(Clone)]
+pub struct SystemdDb {
+    pool: Pool<Sqlite>,
+}
+
+impl SystemdDb {
+    pub fn new(pool: Pool<Sqlite>) -> Self {
+        Self { pool }
+    }
+
+    pub async fn latest_snapshot(&self) -> DResult<SystemdBootSnapshot> {
+        let snapshot = sqlx::query_as!(
+            SystemdBootSnapshot,
+            "SELECT * FROM systemd_boot_snapshot ORDER BY id DESC LIMIT 1",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .ctx(
+            dctx!(),
+            "Cannot fetch snapshot from systemd_boot_snapshot table",
+        )?;
+
+        Ok(snapshot)
+    }
+}
+
 pub async fn initialize_systemd_boot(pool: &Pool<Sqlite>) -> DResult<()> {
     let systemd_table = sqlx::query!(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='systemd_boot_snapshot'"
