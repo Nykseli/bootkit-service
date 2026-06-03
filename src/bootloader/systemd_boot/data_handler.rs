@@ -43,9 +43,14 @@ impl BootkitDataHandler for SystemdDataHandler {
 
         // TODO: difference between system's selected entry and snapshot entry
         //       should be reported to user as it's not expected behavior
+        let kernel_arguments = snapshot.kernel_arguments.or(bootentries
+            .selected
+            .as_ref()
+            .and_then(|entry| entry.options().map(str::to_string)));
         let selected_boot = snapshot
             .selected_kernel
             .or(bootentries.selected.map(|entry| entry.name().to_string()));
+
         let entries = bootentries
             .entries
             .iter()
@@ -57,7 +62,7 @@ impl BootkitDataHandler for SystemdDataHandler {
 
         Ok(BootkitConfig {
             timeout,
-            kernel_parameters: None,
+            kernel_arguments,
             boot_entries: BootkitBootEntries {
                 selected: selected_boot,
                 boot_entries: entries,
