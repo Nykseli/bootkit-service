@@ -6,9 +6,17 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BootkitBootEntry {
+    /// "Raw" name, usually containing more techical info
+    pub name: String,
+    /// Pretty name, if available
+    pub title: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BootkitBootEntries {
     pub selected: Option<String>,
-    pub boot_entries: Vec<String>,
+    pub boot_entries: Vec<BootkitBootEntry>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

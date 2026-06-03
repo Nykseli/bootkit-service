@@ -1,9 +1,9 @@
 use sqlx::{Pool, Sqlite};
 
 use crate::{
-    bootloader::systemd_boot::{boot_entries::SystemdBootEntry, loader_config::LoaderConfigFile},
+    bootloader::systemd_boot::{boot_entries::SystemdBootEntries, loader_config::LoaderConfigFile},
     data::{
-        types::{BootkitBootEntries, BootkitConfig},
+        types::{BootkitBootEntries, BootkitBootEntry, BootkitConfig},
         BootkitDataHandler,
     },
     db::systemd_boot::SystemdDb,
@@ -39,18 +39,28 @@ impl BootkitDataHandler for SystemdDataHandler {
             .get_key_value("timeout")
             .map(|kv| kv.value.clone());
         let bootentries =
-            SystemdBootEntry::new().ctx(dctx!(), "Failed to get systemd-boot bootentries")?;
+            SystemdBootEntries::new().ctx(dctx!(), "Failed to get systemd-boot bootentries")?;
 
         // TODO: difference between system's selected entry and snapshot entry
         //       should be reported to user as it's not expected behavior
-        let selected_boot = snapshot.selected_kernel.or(bootentries.selected);
+        let selected_boot = snapshot
+            .selected_kernel
+            .or(bootentries.selected.map(|entry| entry.name().to_string()));
+        let entries = bootentries
+            .entries
+            .iter()
+            .map(|entry| BootkitBootEntry {
+                name: entry.name().into(),
+                title: entry.title().map(str::to_string),
+            })
+            .collect();
 
         Ok(BootkitConfig {
             timeout,
             kernel_parameters: None,
             boot_entries: BootkitBootEntries {
                 selected: selected_boot,
-                boot_entries: bootentries.entries,
+                boot_entries: entries,
             },
         })
     }
