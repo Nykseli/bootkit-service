@@ -45,7 +45,7 @@ fn format_config_line(line: &FileLine) -> String {
 
 /// systemd-boot loader config file
 /// usually located at /boot/efi/loader/loader.conf
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LoaderConfigFile {
     lines: Vec<FileLine>,
 }
@@ -143,5 +143,13 @@ mod tests {
     fn test_systemd_config_parsing_fail() {
         let err = LoaderConfigFile::new("timeout").unwrap_err();
         assert_eq!(err.error().as_string(), "Error: Expected value on line: 1");
+    }
+
+    #[test]
+    fn test_systemd_entry_spaces_in_values() {
+        let file = LoaderConfigFile::new("options    splash=silent mitigations=auto").unwrap();
+        let lines = file.lines();
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0], ("options", "splash=silent mitigations=auto"));
     }
 }

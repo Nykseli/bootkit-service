@@ -5,6 +5,9 @@ CREATE TABLE systemd_boot_snapshot (
     loader_config TEXT NOT NULL,
     -- selected kernel that's booted to, if it's actually specified
     selected_kernel TEXT,
+    -- kernel args for the selected kernel
+    -- systemd-boot ties kernel args to the boot entry
+    kernel_arguments TEXT,
     -- when snapshot was created
     created DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
 );

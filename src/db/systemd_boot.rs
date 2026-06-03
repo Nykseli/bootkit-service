@@ -3,7 +3,10 @@ use serde::Serialize;
 use sqlx::{Pool, Sqlite};
 
 use crate::{
-    bootloader::systemd_boot::{boot_entries::SystemdBootEntry, loader_config::LoaderConfigFile},
+    bootloader::systemd_boot::{
+        boot_entries::{SystemdBootEntries, SystemdBootEntry},
+        loader_config::LoaderConfigFile,
+    },
     config::{DATABASE_PATH, SYSTEMD_CFG_PATH},
     dctx,
     errors::{DRes, DResult},
@@ -18,6 +21,9 @@ pub struct SystemdBootSnapshot {
     pub loader_config: String,
     /// selected kernel that's booted to, if it's actually specified
     pub selected_kernel: Option<String>,
+    /// kernel args for the selected kernel
+    /// systemd-boot ties kernel args to the boot entry
+    pub kernel_arguments: Option<String>,
     /// when snapshot was created
     pub created: NaiveDateTime,
 }
@@ -74,13 +80,13 @@ pub async fn initialize_systemd_boot(pool: &Pool<Sqlite>) -> DResult<()> {
             .ctx(dctx!(), "Failed to parse systemd config")?;
         if cfg!(feature = "dev") {
             log::debug!("Setting initial snapshot without selected kernel");
-            save_systemd_boot(pool, &config, None::<&str>)
+            save_systemd_boot(pool, &config, None)
                 .await
                 .ctx(dctx!(), "Failed to save systemd-boot enry")?;
         } else {
-            let entries = SystemdBootEntry::new()
+            let entries = SystemdBootEntries::new()
                 .ctx(dctx!(), "Failed to get systemd-boot boot entry information")?;
-            save_systemd_boot(pool, &config, entries.selected)
+            save_systemd_boot(pool, &config, entries.selected.as_ref())
                 .await
                 .ctx(dctx!(), "Failed to save systemd-boot enry")?;
         }
@@ -104,18 +110,22 @@ pub async fn initialize_systemd_boot(pool: &Pool<Sqlite>) -> DResult<()> {
     Ok(())
 }
 
-pub async fn save_systemd_boot<K: Into<String>>(
+pub async fn save_systemd_boot(
     pool: &Pool<Sqlite>,
     conf: &LoaderConfigFile,
-    selected_kernel: Option<K>,
+    entry: Option<&SystemdBootEntry>,
 ) -> DResult<()> {
-    let selected_kernel: Option<String> = selected_kernel.map(K::into);
+    // let selected_kernel: Option<String> = selected_kernel.map(K::into);
+    // let kernel_arguments: Option<String> = kernel_arguments.map(K::into);
+    let selected_kernel = entry.map(|entry| entry.name());
+    let kernel_arguments = entry.map(|entry| entry.options());
     let grub_file = conf.as_string();
 
     sqlx::query!(
-        "INSERT INTO systemd_boot_snapshot (loader_config, selected_kernel) VALUES (?, ?)",
+        "INSERT INTO systemd_boot_snapshot (loader_config, selected_kernel, kernel_arguments) VALUES (?, ?, ?)",
         grub_file,
         selected_kernel,
+        kernel_arguments,
     )
     .execute(pool)
     .await

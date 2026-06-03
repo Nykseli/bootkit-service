@@ -1,12 +1,14 @@
 use std::fs::{read, read_dir};
 
 use crate::{
+    bootloader::systemd_boot::loader_config::LoaderConfigFile,
     dctx,
     errors::{DError, DRes, DResOption, DResult},
 };
 
 // TODO: add this to config
 const EFI_VARS_PATH: &str = "/sys/firmware/efi/efivars/";
+const LOADER_ENTRIES_PATH: &str = "/boot/efi/loader/entries/";
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -86,14 +88,93 @@ fn read_efi_var(name: &str) -> DResult<Option<EfiAttribute>> {
     Ok(None)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct SystemdBootEntry {
-    pub entries: Vec<String>,
-    pub selected: Option<String>,
+    // TODO: since loader config is not a general purpose sturct, should we rename it?
+    /// Loader config file. Doesn't exists for autodetected entries
+    file: Option<LoaderConfigFile>,
+    /// name of the entry file, including .conf
+    name: String,
+    /// pretty name of the entry, if it exists
+    title: Option<String>,
+    /// specified kernel arguments if defined
+    options: Option<String>,
 }
 
 impl SystemdBootEntry {
+    fn new(name: &str) -> DResult<Self> {
+        if let Some(entry) = Self::auto_detected(name) {
+            return Ok(entry);
+        }
+
+        let path = format!("{LOADER_ENTRIES_PATH}{name}");
+        // TODO: error
+        let file = LoaderConfigFile::from_file(&path)
+            .ctx(dctx!(), format!("Failed to load config from {path}"))?;
+
+        let title = file.get_key_value("title").map(|kv| kv.value.clone());
+        let options = file.get_key_value("options").map(|kv| kv.value.clone());
+
+        Ok(Self {
+            title,
+            options,
+            name: name.to_string(),
+            file: Some(file),
+        })
+    }
+
+    /// Systemd-boot has auto detected boot entries, that we can autogenrate
+    /// entry information for
+    /// See the table in Options -> default: https://www.freedesktop.org/software/systemd/man/latest/loader.conf.html
+    fn auto_detected(name: &str) -> Option<Self> {
+        let title = if name == "auto-efi-default" {
+            "EFI Default Loader"
+        } else if name == "auto-efi-shell" {
+            "EFI Shell"
+        } else if name == "auto-osx" {
+            "macOS"
+        } else if name == "auto-poweroff" {
+            "Power Off The System"
+        } else if name == "auto-reboot" {
+            "Reboot The System"
+        } else if name == "auto-reboot-to-firmware-setup" {
+            "Reboot Into Firmware Interface"
+        } else if name == "auto-windows" {
+            "Windows Boot Manager"
+        } else {
+            return None;
+        };
+
+        Some(Self {
+            file: None,
+            options: None,
+            title: Some(title.to_string()),
+            name: name.to_string(),
+        })
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn title(&self) -> Option<&str> {
+        self.title.as_deref()
+    }
+
+    pub fn options(&self) -> Option<&str> {
+        self.options.as_deref()
+    }
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+pub struct SystemdBootEntries {
+    pub entries: Vec<SystemdBootEntry>,
+    pub selected: Option<SystemdBootEntry>,
+}
+
+impl SystemdBootEntries {
     pub fn new() -> DResult<Self> {
         log::debug!("Reading kernel boot entries from {EFI_VARS_PATH}");
 
@@ -101,11 +182,18 @@ impl SystemdBootEntry {
         let entries = read_efi_var("LoaderEntries")
             .flat_ctx(dctx!(), "Wasn't able to find LoaderEntries efi variable")?;
         log::trace!("Found systemd-boot LoaderEntries: {entries:#?}");
-        let entries = entries.data;
+
+        let entries: DResult<Vec<SystemdBootEntry>> = entries
+            .data
+            .iter()
+            .map(|name| SystemdBootEntry::new(name))
+            .collect();
+        let entries = entries.ctx(dctx!(), "Failed to read and parse systemd-boot entries")?;
 
         let selected = read_efi_var("LoaderEntryDefault")
             .ctx(dctx!(), "Error reading LoaderEntryDefault efivariable")?
-            .map(|attr| attr.data[0].clone());
+            .and_then(|attr| entries.iter().find(|entry| entry.name == attr.data[0]))
+            .cloned();
 
         log::trace!("Found systemd-boot selected entry: {selected:#?}");
 
