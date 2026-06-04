@@ -43,18 +43,19 @@ impl BootkitDataHandler for SystemdDataHandler {
 
         let loader_conf = LoaderConfigFile::new(SYSTEMD_CFG_PATH, &snapshot.loader_config)
             .ctx(dctx!(), "Failed to parse snapshot loader config")?;
+        let entry_config = EntryConfigFile::new(&snapshot.selected_entry, &snapshot.entry_config)
+            .ctx(dctx!(), "Failed to parse snapshot entry config")?;
 
         let timeout = loader_conf
             .get_key_value("timeout")
             .map(|kv| kv.value.clone());
+
         let bootentries =
             SystemdBootEntries::new().ctx(dctx!(), "Failed to get systemd-boot bootentries")?;
 
         // TODO: difference between system's selected entry and snapshot entry
         //       should be reported to user as it's not expected behavior
-        let kernel_arguments = snapshot
-            .kernel_arguments
-            .or(bootentries.selected.options().map(str::to_string));
+        let kernel_arguments = entry_config.options().map(str::to_string);
         let selected_entry = snapshot.selected_entry;
 
         let entries = bootentries

@@ -280,6 +280,7 @@ impl SystemdBootEntry {
         }
     }
 
+    #[allow(dead_code)]
     pub fn options(&self) -> Option<&str> {
         match self {
             SystemdBootEntry::File(file) => file.options.as_deref(),
