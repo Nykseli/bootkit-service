@@ -55,9 +55,7 @@ impl BootkitDataHandler for SystemdDataHandler {
         let kernel_arguments = snapshot
             .kernel_arguments
             .or(bootentries.selected.options().map(str::to_string));
-        let selected_boot = snapshot
-            .selected_kernel
-            .unwrap_or_else(|| bootentries.selected.name().to_string());
+        let selected_entry = snapshot.selected_entry;
 
         let entries = bootentries
             .entries
@@ -72,7 +70,7 @@ impl BootkitDataHandler for SystemdDataHandler {
             timeout,
             kernel_arguments,
             boot_entries: BootkitBootEntries {
-                selected: Some(selected_boot),
+                selected: Some(selected_entry),
                 boot_entries: entries,
             },
         })
@@ -92,8 +90,8 @@ impl BootkitDataHandler for SystemdDataHandler {
                 created: snapshot.created,
                 config: snapshot.loader_config,
                 // TODO: read boot entry info to get more kernel data
-                kernel: snapshot.selected_kernel.map(|kernel| BootkitBootEntry {
-                    name: kernel,
+                kernel: Some(BootkitBootEntry {
+                    name: snapshot.selected_entry,
                     title: None,
                 }),
             })
@@ -124,12 +122,8 @@ impl BootkitDataHandler for SystemdDataHandler {
         // TODO: Can we recover from kernel not being selected?
         // TODO: add the assumption to DB that there's always a selected kernel entry
         // TODO: use selected kernel from config, if none (Default), use the current one
-        let selected_kernel = snapshot.selected_kernel.ctx(
-            dctx!(),
-            "Expected kernel to be selected for systemd-boot snapshot",
-        )?;
-
-        let mut entry = EntryConfigFile::new(selected_kernel, &snapshot.entry_config)
+        let selected_entry = snapshot.selected_entry;
+        let mut entry = EntryConfigFile::new(selected_entry, &snapshot.entry_config)
             .ctx(dctx!(), "failed to get systemd boot entry")?;
         entry.update_config(config);
         entry

@@ -3,8 +3,8 @@ CREATE TABLE systemd_boot_snapshot (
     id INTEGER PRIMARY KEY NOT NULL,
     -- /boot/efi/loader/loader.conf config
     loader_config TEXT NOT NULL,
-    -- selected kernel that's booted to, if it's actually specified
-    selected_kernel TEXT,
+    -- selected entry config name
+    selected_entry TEXT NOT NULL,
     -- kernel args for the selected kernel
     -- systemd-boot ties kernel args to the boot entry
     kernel_arguments TEXT,
