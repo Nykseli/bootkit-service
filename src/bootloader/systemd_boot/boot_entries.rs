@@ -1,6 +1,6 @@
 use std::{
     fs::{read, read_dir, read_to_string},
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use crate::{
@@ -116,15 +116,31 @@ fn parse_config_line(line_num: usize, line: &str) -> DResult<KeyValue> {
     Ok(KeyValue::new(line_num, line, key, value))
 }
 
+/// See the table in Options -> default: https://www.freedesktop.org/software/systemd/man/latest/loader.conf.html
+#[derive(Debug, Clone)]
+pub struct EntryConfigAuto {
+    /// "raw" name of the auto detected entry
+    name: String,
+    /// pretty name of the entry,
+    title: String,
+}
+
 /// systemd-boot boot entry config
 /// usually located at /boot/efi/loader/entries/
 #[derive(Debug, Clone)]
 pub struct EntryConfigFile {
     file: ConfigFile,
+    /// name of the entry file, including .conf
+    name: String,
+    /// pretty name of the entry, if it exists
+    title: Option<String>,
+    /// specified kernel arguments if defined
+    options: Option<String>,
 }
 
 impl EntryConfigFile {
-    fn new(path: PathBuf, file: &str) -> DResult<Self> {
+    pub fn new<N: Into<String>>(name: N, file: &str) -> DResult<Self> {
+        let name = name.into();
         let mut lines = Vec::new();
 
         // use split instead of lines to save the trailing empty new line
@@ -146,15 +162,23 @@ impl EntryConfigFile {
             lines.push(FileLine::KeyValue(keyval));
         }
 
+        let path = format!("{LOADER_ENTRIES_PATH}{name}");
+        let file = ConfigFile::new(path, lines);
+        let title = file.get_key_value("title").map(|kv| kv.value.clone());
+        let options = file.get_key_value("options").map(|kv| kv.value.clone());
+
         Ok(Self {
-            file: ConfigFile::new(path, lines),
+            file,
+            name,
+            title,
+            options,
         })
     }
 
-    pub fn from_file<P: AsRef<Path>>(path: P) -> DResult<Self> {
+    pub fn from_file<P: AsRef<Path>>(name: String, path: P) -> DResult<Self> {
         let file = read_to_string(path.as_ref())
             .ctx(dctx!(), format!("Error reading {:?}", path.as_ref()))?;
-        Self::new(path.as_ref().into(), &file)
+        Self::new(name, &file)
     }
 
     pub fn update_config(&mut self, config: &BootkitConfig) {
@@ -162,6 +186,19 @@ impl EntryConfigFile {
         if let Some(args) = &config.kernel_arguments {
             self.update_or_insert("options", args);
         }
+        self.options = config.kernel_arguments.clone();
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn title(&self) -> Option<&str> {
+        self.title.as_deref()
+    }
+
+    pub fn options(&self) -> Option<&str> {
+        self.options.as_deref()
     }
 }
 
@@ -181,36 +218,24 @@ impl ConfigFileParser for EntryConfigFile {
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-pub struct SystemdBootEntry {
-    /// Loader config file. Doesn't exists for autodetected entries
-    pub file: Option<EntryConfigFile>,
-    /// name of the entry file, including .conf
-    name: String,
-    /// pretty name of the entry, if it exists
-    title: Option<String>,
-    /// specified kernel arguments if defined
-    options: Option<String>,
+pub enum SystemdBootEntry {
+    /// Entry that has a corresponding file to it
+    File(EntryConfigFile),
+    /// Entries that are autodetected by systemd-boot. No corresponding config files
+    Auto(EntryConfigAuto),
 }
 
 impl SystemdBootEntry {
-    pub fn new(name: &str) -> DResult<Self> {
+    pub fn from_name(name: &str) -> DResult<Self> {
         if let Some(entry) = Self::auto_detected(name) {
             return Ok(entry);
         }
 
         let path = format!("{LOADER_ENTRIES_PATH}{name}");
-        let file = EntryConfigFile::from_file(&path)
+        let file = EntryConfigFile::from_file(name.into(), &path)
             .ctx(dctx!(), format!("Failed to load config from {path}"))?;
 
-        let title = file.get_key_value("title").map(|kv| kv.value.clone());
-        let options = file.get_key_value("options").map(|kv| kv.value.clone());
-
-        Ok(Self {
-            title,
-            options,
-            name: name.to_string(),
-            file: Some(file),
-        })
+        Ok(Self::File(file))
     }
 
     /// Systemd-boot has auto detected boot entries, that we can autogenrate
@@ -235,24 +260,38 @@ impl SystemdBootEntry {
             return None;
         };
 
-        Some(Self {
-            file: None,
-            options: None,
-            title: Some(title.to_string()),
+        Some(Self::Auto(EntryConfigAuto {
+            title: title.to_string(),
             name: name.to_string(),
-        })
+        }))
     }
 
     pub fn name(&self) -> &str {
-        &self.name
+        match self {
+            SystemdBootEntry::File(file) => &file.name,
+            SystemdBootEntry::Auto(auto) => &auto.name,
+        }
     }
 
     pub fn title(&self) -> Option<&str> {
-        self.title.as_deref()
+        match self {
+            SystemdBootEntry::File(file) => file.title(),
+            SystemdBootEntry::Auto(auto) => Some(&auto.title),
+        }
     }
 
     pub fn options(&self) -> Option<&str> {
-        self.options.as_deref()
+        match self {
+            SystemdBootEntry::File(file) => file.options.as_deref(),
+            SystemdBootEntry::Auto(_) => None,
+        }
+    }
+
+    pub fn as_file(&self) -> Option<&EntryConfigFile> {
+        match self {
+            SystemdBootEntry::File(file) => Some(file),
+            _ => None,
+        }
     }
 }
 
@@ -260,7 +299,7 @@ impl SystemdBootEntry {
 #[allow(dead_code)]
 pub struct SystemdBootEntries {
     pub entries: Vec<SystemdBootEntry>,
-    pub selected: Option<SystemdBootEntry>,
+    pub selected: SystemdBootEntry,
 }
 
 impl SystemdBootEntries {
@@ -275,14 +314,20 @@ impl SystemdBootEntries {
         let entries: DResult<Vec<SystemdBootEntry>> = entries
             .data
             .iter()
-            .map(|name| SystemdBootEntry::new(name))
+            .map(|name| SystemdBootEntry::from_name(name))
             .collect();
         let entries = entries.ctx(dctx!(), "Failed to read and parse systemd-boot entries")?;
 
-        let selected = read_efi_var("LoaderEntryDefault")
-            .ctx(dctx!(), "Error reading LoaderEntryDefault efivariable")?
-            .and_then(|attr| entries.iter().find(|entry| entry.name == attr.data[0]))
-            .cloned();
+        let default = read_efi_var("LoaderEntryDefault")
+            .flat_ctx(dctx!(), "Error reading LoaderEntryDefault efivariable")?;
+        let selected = entries
+            .iter()
+            .find(|entry| entry.name() == default.data[0])
+            .ctx(
+                dctx!(),
+                "Couldn't find LoaderEntryDefault from LoaderEntries",
+            )?
+            .clone();
 
         log::trace!("Found systemd-boot selected entry: {selected:#?}");
 

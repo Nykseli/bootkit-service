@@ -8,6 +8,8 @@ CREATE TABLE systemd_boot_snapshot (
     -- kernel args for the selected kernel
     -- systemd-boot ties kernel args to the boot entry
     kernel_arguments TEXT,
+    -- /boot/efi/loader/entries/ config data
+    entry_config TEXT NOT NULL,
     -- when snapshot was created
     created DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
 );

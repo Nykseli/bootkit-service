@@ -110,8 +110,23 @@ impl ConfigFile {
             self.lines.insert(self.lines.len() - 1, line);
         }
     }
+
+    pub fn get_key_value(&self, key: &str) -> Option<&KeyValue> {
+        self.lines
+            .iter()
+            .filter_map(FileLine::key_value)
+            .find(|kv| kv.key == key)
+    }
+
+    pub fn get_key_value_mut(&mut self, key: &str) -> Option<&mut KeyValue> {
+        self.lines
+            .iter_mut()
+            .filter_map(FileLine::key_value_mut)
+            .find(|kv| kv.key == key)
+    }
 }
 
+#[allow(dead_code)]
 pub trait ConfigFileParser {
     fn format_key_value(key_value: &KeyValue) -> String;
     fn config_file(&self) -> &ConfigFile;
@@ -143,17 +158,11 @@ pub trait ConfigFileParser {
     }
 
     fn get_key_value(&self, key: &str) -> Option<&KeyValue> {
-        self.lines()
-            .iter()
-            .filter_map(FileLine::key_value)
-            .find(|kv| kv.key == key)
+        self.config_file().get_key_value(key)
     }
 
     fn get_key_value_mut(&mut self, key: &str) -> Option<&mut KeyValue> {
-        self.lines_mut()
-            .iter_mut()
-            .filter_map(FileLine::key_value_mut)
-            .find(|kv| kv.key == key)
+        self.config_file_mut().get_key_value_mut(key)
     }
 
     fn as_string(&self) -> String {

@@ -6,7 +6,7 @@ use crate::{
     bootloader::{
         parser::ConfigFileParser,
         systemd_boot::{
-            boot_entries::{SystemdBootEntries, SystemdBootEntry},
+            boot_entries::{EntryConfigFile, SystemdBootEntries},
             loader_config::LoaderConfigFile,
         },
     },
@@ -22,6 +22,8 @@ pub struct SystemdBootSnapshot {
     pub id: i64,
     /// /boot/efi/loader/loader.conf config
     pub loader_config: String,
+    /// /boot/efi/loader/entries/ config data
+    pub entry_config: String,
     /// selected kernel that's booted to, if it's actually specified
     pub selected_kernel: Option<String>,
     /// kernel args for the selected kernel
@@ -74,7 +76,7 @@ impl SystemdDb {
     pub async fn save_systemd_boot(
         &self,
         conf: &LoaderConfigFile,
-        entry: Option<&SystemdBootEntry>,
+        entry: &EntryConfigFile,
     ) -> DResult<()> {
         // TODO: add save_systemd_boot logic here and remove the logic there
         save_systemd_boot(&self.pool, conf, entry)
@@ -107,18 +109,17 @@ pub async fn initialize_systemd_boot(pool: &Pool<Sqlite>) -> DResult<()> {
         log::debug!("systemd_boot_snapshot table is empty. Setting first entry");
         let config = LoaderConfigFile::from_file(SYSTEMD_CFG_PATH)
             .ctx(dctx!(), "Failed to parse systemd config")?;
-        if cfg!(feature = "dev") {
-            log::debug!("Setting initial snapshot without selected kernel");
-            save_systemd_boot(pool, &config, None)
-                .await
-                .ctx(dctx!(), "Failed to save systemd-boot enry")?;
-        } else {
-            let entries = SystemdBootEntries::new()
-                .ctx(dctx!(), "Failed to get systemd-boot boot entry information")?;
-            save_systemd_boot(pool, &config, entries.selected.as_ref())
-                .await
-                .ctx(dctx!(), "Failed to save systemd-boot enry")?;
-        }
+
+        let entries = SystemdBootEntries::new()
+            .ctx(dctx!(), "Failed to get systemd-boot boot entry information")?;
+        let selected = entries.selected.as_file().ctx(
+            dctx!(),
+            "Expected selected boot entry to not be auto detected entry",
+        )?;
+
+        save_systemd_boot(pool, &config, selected)
+            .await
+            .ctx(dctx!(), "Failed to save systemd-boot enry")?;
     }
 
     let grub_table = sqlx::query!(
@@ -142,19 +143,19 @@ pub async fn initialize_systemd_boot(pool: &Pool<Sqlite>) -> DResult<()> {
 pub async fn save_systemd_boot(
     pool: &Pool<Sqlite>,
     conf: &LoaderConfigFile,
-    entry: Option<&SystemdBootEntry>,
+    entry: &EntryConfigFile,
 ) -> DResult<()> {
-    // let selected_kernel: Option<String> = selected_kernel.map(K::into);
-    // let kernel_arguments: Option<String> = kernel_arguments.map(K::into);
-    let selected_kernel = entry.map(|entry| entry.name());
-    let kernel_arguments = entry.map(|entry| entry.options());
-    let grub_file = conf.as_string();
+    let selected_kernel = entry.name();
+    let kernel_arguments = entry.options();
+    let entry_config = entry.as_string();
+    let loader_config = conf.as_string();
 
     sqlx::query!(
-        "INSERT INTO systemd_boot_snapshot (loader_config, selected_kernel, kernel_arguments) VALUES (?, ?, ?)",
-        grub_file,
+        "INSERT INTO systemd_boot_snapshot (loader_config, selected_kernel, kernel_arguments, entry_config) VALUES (?, ?, ?, ?)",
+        loader_config,
         selected_kernel,
         kernel_arguments,
+        entry_config,
     )
     .execute(pool)
     .await
