@@ -79,17 +79,8 @@ impl LoaderConfigFile {
 }
 
 impl ConfigFileParser for LoaderConfigFile {
-    fn format_config_line(line: &FileLine) -> String {
-        match line {
-            FileLine::KeyValue(key_value) => {
-                if !key_value.changed() {
-                    key_value.original().into()
-                } else {
-                    format!("{} {}", key_value.key, key_value.value)
-                }
-            }
-            FileLine::String { raw_line } => raw_line.into(),
-        }
+    fn format_key_value(key_value: &KeyValue) -> String {
+        format!("{} {}", key_value.key, key_value.value)
     }
 
     fn config_file(&self) -> &ConfigFile {
@@ -233,6 +224,24 @@ mod tests {
     }
 
     #[test]
+    fn test_systemd_entry_update_config_str() {
+        let mut file = LoaderConfigFile::new("timeout 10\n").unwrap();
+        let lines = file.lines();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], ("timeout", "10"));
+        assert_eq!(lines[1], (""));
+
+        let mut config = BootkitConfig::default();
+        config.timeout = Some(String::from("20"));
+        file.update_config(&config);
+        let lines = file.lines();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], ("timeout", "20"));
+        assert_eq!(lines[1], (""));
+        assert_eq!(file.as_string(), "timeout 20\n");
+    }
+
+    #[test]
     fn test_systemd_entry_update_config_add() {
         let mut file = LoaderConfigFile::new("foo bar").unwrap();
         let lines = file.lines();
@@ -246,5 +255,22 @@ mod tests {
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0], ("foo", "bar"));
         assert_eq!(lines[1], ("timeout", "20"));
+    }
+
+    #[test]
+    fn test_systemd_entry_update_config_add_str() {
+        let mut file = LoaderConfigFile::new("foo bar").unwrap();
+        let lines = file.lines();
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0], ("foo", "bar"));
+
+        let mut config = BootkitConfig::default();
+        config.timeout = Some(String::from("20"));
+        file.update_config(&config);
+        let lines = file.lines();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], ("foo", "bar"));
+        assert_eq!(lines[1], ("timeout", "20"));
+        assert_eq!(file.as_string(), "foo bar\ntimeout 20");
     }
 }
