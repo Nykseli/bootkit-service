@@ -3,7 +3,7 @@ use zbus::{connection::Builder, fdo, interface, object_server::SignalEmitter, Co
 use crate::{
     bootloader::{systemd_boot::data_handler::SystemdDataHandler, BootloaderType},
     config::ConfigArgs,
-    data::BootkitDataHandler,
+    data::{types::BootkitConfig, BootkitDataHandler},
     db::Database,
     dbus::handler::DbusHandler,
     dctx,
@@ -98,7 +98,21 @@ impl BootKitConfig {
 
     async fn save_config(&self, data: &str) -> Result<String, fdo::Error> {
         log::debug!("Calling org.opensuse.bootkit.Config SaveConfig");
-        let data = self.handler.save_grub2_config(data).await?;
+        let data = match BootloaderType::system_type() {
+            BootloaderType::Grub => self.handler.save_grub2_config(data).await?,
+            BootloaderType::SystemdBoot => {
+                let config = BootkitConfig::deserialize(data)
+                    .ctx(dctx!(), "Failed to parse json data to BootkitConfig")?;
+                self.systemd
+                    .save_config(&config)
+                    .await
+                    .ctx(dctx!(), "Failed to get systemd-boot config")?;
+
+                // TODO: structured response?
+                String::from("ok")
+            }
+        };
+
         Ok(data)
     }
 

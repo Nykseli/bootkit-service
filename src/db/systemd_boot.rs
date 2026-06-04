@@ -70,6 +70,17 @@ impl SystemdDb {
 
         Ok(snapshot)
     }
+
+    pub async fn save_systemd_boot(
+        &self,
+        conf: &LoaderConfigFile,
+        entry: Option<&SystemdBootEntry>,
+    ) -> DResult<()> {
+        // TODO: add save_systemd_boot logic here and remove the logic there
+        save_systemd_boot(&self.pool, conf, entry)
+            .await
+            .ctx(dctx!(), "Saving systemd-boot snapshot failed")
+    }
 }
 
 pub async fn initialize_systemd_boot(pool: &Pool<Sqlite>) -> DResult<()> {

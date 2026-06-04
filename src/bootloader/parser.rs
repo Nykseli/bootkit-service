@@ -1,4 +1,11 @@
+use std::{fs::File, io::Write, path::Path};
+
 use serde::{Deserialize, Serialize};
+
+use crate::{
+    dctx,
+    errors::{DRes, DResult},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyValue {
@@ -11,7 +18,12 @@ pub struct KeyValue {
 }
 
 impl KeyValue {
-    pub fn new<KV: Into<String>>(line: usize, original: KV, key: KV, value: KV) -> Self {
+    pub fn new<O, K, V>(line: usize, original: O, key: K, value: V) -> Self
+    where
+        O: Into<String>,
+        K: Into<String>,
+        V: Into<String>,
+    {
         Self {
             line,
             key: key.into(),
@@ -27,6 +39,14 @@ impl KeyValue {
 
     pub fn changed(&self) -> bool {
         self.changed
+    }
+
+    pub fn update<V: Into<String>>(&mut self, value: V) {
+        let new_value = value.into();
+        if self.value != new_value {
+            self.changed = true;
+            self.value = new_value;
+        }
     }
 }
 
@@ -44,6 +64,13 @@ impl FileLine {
             _ => None,
         }
     }
+
+    pub fn key_value_mut(&mut self) -> Option<&mut KeyValue> {
+        match self {
+            FileLine::KeyValue(key_value) => Some(key_value),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -55,14 +82,43 @@ impl ConfigFile {
     pub fn new(lines: Vec<FileLine>) -> Self {
         Self { lines }
     }
+
+    fn has_trailing_new_line(&self) -> bool {
+        if let Some(FileLine::String { raw_line }) = self.lines.last() {
+            // empty line means that the line only had a newline character
+            raw_line.is_empty()
+        } else {
+            false
+        }
+    }
+
+    pub fn add_key_value_line<K: Into<String>, V: Into<String>>(&mut self, key: K, value: V) {
+        // TODO: keep the empty new line end of file IF there was one already
+        let mut kv = KeyValue::new(self.lines.len(), String::new(), key, value);
+        // a bit of a hack to make sure original value is ignored when formatting etc
+        kv.changed = true;
+
+        let line = FileLine::KeyValue(kv);
+        if !self.has_trailing_new_line() {
+            self.lines.push(line);
+        } else {
+            // insert line where nl used to be
+            self.lines.insert(self.lines.len() - 1, line);
+        }
+    }
 }
 
 pub trait ConfigFileParser {
     fn format_config_line(line: &FileLine) -> String;
     fn config_file(&self) -> &ConfigFile;
+    fn config_file_mut(&mut self) -> &mut ConfigFile;
 
     fn lines(&self) -> &[FileLine] {
         &self.config_file().lines
+    }
+
+    fn lines_mut(&mut self) -> &mut [FileLine] {
+        &mut self.config_file_mut().lines
     }
 
     fn get_key_value(&self, key: &str) -> Option<&KeyValue> {
@@ -72,8 +128,41 @@ pub trait ConfigFileParser {
             .find(|kv| kv.key == key)
     }
 
+    fn get_key_value_mut(&mut self, key: &str) -> Option<&mut KeyValue> {
+        self.lines_mut()
+            .iter_mut()
+            .filter_map(FileLine::key_value_mut)
+            .find(|kv| kv.key == key)
+    }
+
     fn as_string(&self) -> String {
         let lines: Vec<String> = self.lines().iter().map(Self::format_config_line).collect();
         lines.join("\n")
+    }
+
+    fn update_or_insert<K: AsRef<str>, V: Into<String>>(&mut self, key: K, value: V) {
+        let key = key.as_ref();
+        if let Some(key_val) = self.get_key_value_mut(key) {
+            key_val.update(value);
+        } else {
+            self.config_file_mut().add_key_value_line(key, value);
+        };
+    }
+
+    // TODO: add the path to be part of ConfigFile
+    fn save<P: AsRef<Path>>(&self, path: P) -> DResult<()> {
+        log::debug!("Writing to file {:?}", path.as_ref());
+
+        let mut file = File::create(path.as_ref()).ctx(
+            dctx!(),
+            format!("Couldn't open file '{:?}' for reading", path.as_ref()),
+        )?;
+
+        let content = self.as_string();
+        log::trace!("Writen content:\n{content}");
+        write!(file, "{}", content).ctx(
+            dctx!(),
+            format!("Failed to write to file '{:?}'", path.as_ref()),
+        )
     }
 }

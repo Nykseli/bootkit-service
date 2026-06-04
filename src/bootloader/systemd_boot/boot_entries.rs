@@ -1,7 +1,11 @@
-use std::fs::{read, read_dir};
+use std::{
+    fs::{read, read_dir, read_to_string},
+    path::Path,
+};
 
 use crate::{
-    bootloader::{parser::ConfigFileParser, systemd_boot::loader_config::LoaderConfigFile},
+    bootloader::parser::{ConfigFile, ConfigFileParser, FileLine, KeyValue},
+    data::types::BootkitConfig,
     dctx,
     errors::{DError, DRes, DResOption, DResult},
 };
@@ -88,12 +92,109 @@ fn read_efi_var(name: &str) -> DResult<Option<EfiAttribute>> {
     Ok(None)
 }
 
+fn parse_config_line(line_num: usize, line: &str) -> DResult<KeyValue> {
+    let trimmed = line.trim();
+    let mut split = trimmed.split_whitespace();
+    let key = split.next().ctx(
+        dctx!(),
+        format!("Expected whitespace separator on line {}", line_num + 1),
+    )?;
+
+    let value = if let Some(value) = trimmed.strip_prefix(key) {
+        value.trim()
+    } else {
+        ""
+    };
+
+    if value.is_empty() {
+        return Err(DError::generic(
+            dctx!(),
+            format!("Expected value on line: {}", line_num + 1),
+        ));
+    }
+
+    Ok(KeyValue::new(line_num, line, key, value))
+}
+
+/// systemd-boot boot entry config
+/// usually located at /boot/efi/loader/entries/
+#[derive(Debug, Clone)]
+pub struct EntryConfigFile {
+    file: ConfigFile,
+    pub path: String,
+}
+
+impl EntryConfigFile {
+    fn new(file: &str, path: String) -> DResult<Self> {
+        let mut lines = Vec::new();
+
+        // use split instead of lines to save the trailing empty new line
+        // this doesn't handle \r\n but this is very unlikely to run on
+        // windows anyways
+        // TODO: refactor this and from_file to the config trait
+        //       we just need the parse part and checking when line is valid
+        for (idx, line) in file.split('\n').enumerate() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                lines.push(FileLine::String {
+                    raw_line: line.into(),
+                });
+                continue;
+            }
+
+            let keyval = parse_config_line(idx, line)
+                .ctx(dctx!(), "Failed to parse systemd-boot config file")?;
+            lines.push(FileLine::KeyValue(keyval));
+        }
+
+        Ok(Self {
+            path,
+            file: ConfigFile::new(lines),
+        })
+    }
+
+    pub fn from_file<P: AsRef<Path>>(path: P) -> DResult<Self> {
+        let file = read_to_string(path.as_ref())
+            .ctx(dctx!(), format!("Error reading {:?}", path.as_ref()))?;
+        Self::new(&file, path.as_ref().to_str().unwrap().to_string())
+    }
+
+    pub fn update_config(&mut self, config: &BootkitConfig) {
+        // TODO: should no kernel arguments mean we remove the option?
+        if let Some(args) = &config.kernel_arguments {
+            self.update_or_insert("options", args);
+        }
+    }
+}
+
+impl ConfigFileParser for EntryConfigFile {
+    fn format_config_line(line: &FileLine) -> String {
+        match line {
+            FileLine::KeyValue(key_value) => {
+                if !key_value.changed() {
+                    key_value.original().into()
+                } else {
+                    format!("{} {}", key_value.key, key_value.value)
+                }
+            }
+            FileLine::String { raw_line } => raw_line.into(),
+        }
+    }
+
+    fn config_file(&self) -> &ConfigFile {
+        &self.file
+    }
+
+    fn config_file_mut(&mut self) -> &mut ConfigFile {
+        &mut self.file
+    }
+}
+
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct SystemdBootEntry {
-    // TODO: since loader config is not a general purpose sturct, should we rename it?
     /// Loader config file. Doesn't exists for autodetected entries
-    file: Option<LoaderConfigFile>,
+    pub file: Option<EntryConfigFile>,
     /// name of the entry file, including .conf
     name: String,
     /// pretty name of the entry, if it exists
@@ -103,14 +204,13 @@ pub struct SystemdBootEntry {
 }
 
 impl SystemdBootEntry {
-    fn new(name: &str) -> DResult<Self> {
+    pub fn new(name: &str) -> DResult<Self> {
         if let Some(entry) = Self::auto_detected(name) {
             return Ok(entry);
         }
 
         let path = format!("{LOADER_ENTRIES_PATH}{name}");
-        // TODO: error
-        let file = LoaderConfigFile::from_file(&path)
+        let file = EntryConfigFile::from_file(&path)
             .ctx(dctx!(), format!("Failed to load config from {path}"))?;
 
         let title = file.get_key_value("title").map(|kv| kv.value.clone());

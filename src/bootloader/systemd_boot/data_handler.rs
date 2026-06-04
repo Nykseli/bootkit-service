@@ -3,8 +3,12 @@ use sqlx::{Pool, Sqlite};
 use crate::{
     bootloader::{
         parser::ConfigFileParser,
-        systemd_boot::{boot_entries::SystemdBootEntries, loader_config::LoaderConfigFile},
+        systemd_boot::{
+            boot_entries::{SystemdBootEntries, SystemdBootEntry},
+            loader_config::LoaderConfigFile,
+        },
     },
+    config::SYSTEMD_CFG_PATH,
     data::{
         types::{
             BootkitBootEntries, BootkitBootEntry, BootkitConfig, BootkitSnapshot, BootkitSnapshots,
@@ -101,5 +105,59 @@ impl BootkitDataHandler for SystemdDataHandler {
             // TODO: get selected
             selected: None,
         })
+    }
+
+    async fn save_config(&self, config: &BootkitConfig) -> DResult<()> {
+        log::debug!("Start saving sytemd-boot config snapshot");
+        log::trace!("Config: {config:?}");
+        // TODO: if any of this fails, revert to original configs
+        // TODO: check if the config has actual changes to avoid duplicate snapshots
+
+        // TODO: get selected snapshot if one is selected
+        let snapshot = self
+            .db
+            .latest_snapshot()
+            .await
+            .ctx(dctx!(), "Failed to fetch latest snapshot")?;
+
+        // TODO: set/save selected kernel!
+
+        // TODO: Can we recover from kernel not being selected?
+        // TODO: add the assumption to DB that there's always a selected kernel entry
+        // TODO: use selected kernel from config, if none (Default), use the current one
+        let selected_kernel = snapshot.selected_kernel.ctx(
+            dctx!(),
+            "Expected kernel to be selected for systemd-boot snapshot",
+        )?;
+
+        let mut entry = SystemdBootEntry::new(&selected_kernel)
+            .ctx(dctx!(), "failed to get systemd boot entry")?;
+        let entry_config = entry
+            .file
+            .as_mut()
+            .ctx(dctx!(), "Cannot edit build-in sytemd-boot entry")?;
+
+        entry_config.update_config(config);
+        entry_config
+            .save(&entry_config.path)
+            .ctx(dctx!(), "Failed to save kernel entry config")?;
+
+        // TODO: edit the selected/current snapshot instead?
+        //       that we we avoid weird situations when 3rd party is manally editing a file
+        let mut loader_config = LoaderConfigFile::from_file(SYSTEMD_CFG_PATH)
+            .ctx(dctx!(), "Failed to parse systemd config")?;
+
+        loader_config.update_config(config);
+        loader_config
+            .save(SYSTEMD_CFG_PATH)
+            .ctx(dctx!(), "Failed to save systemd-boot loader config")?;
+
+        self.db
+            .save_systemd_boot(&loader_config, Some(&entry))
+            .await
+            .ctx(dctx!(), "Failed to save systemd-boot snapshot")?;
+
+        log::debug!("Successfully saved sytemd-boot config snapshot");
+        Ok(())
     }
 }

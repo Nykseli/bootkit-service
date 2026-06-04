@@ -2,6 +2,7 @@ use std::{fs::read_to_string, path::Path};
 
 use crate::{
     bootloader::parser::{ConfigFile, ConfigFileParser, FileLine, KeyValue},
+    data::types::BootkitConfig,
     dctx,
     errors::{DError, DRes, DResult},
 };
@@ -68,13 +69,20 @@ impl LoaderConfigFile {
             .ctx(dctx!(), format!("Error reading {:?}", path.as_ref()))?;
         Self::new(&file)
     }
+
+    pub fn update_config(&mut self, config: &BootkitConfig) {
+        // TODO: if timeout is none, remove it
+        if let Some(timeout) = &config.timeout {
+            self.update_or_insert("timeout", timeout);
+        }
+    }
 }
 
 impl ConfigFileParser for LoaderConfigFile {
     fn format_config_line(line: &FileLine) -> String {
         match line {
             FileLine::KeyValue(key_value) => {
-                if key_value.changed() {
+                if !key_value.changed() {
                     key_value.original().into()
                 } else {
                     format!("{} {}", key_value.key, key_value.value)
@@ -86,6 +94,10 @@ impl ConfigFileParser for LoaderConfigFile {
 
     fn config_file(&self) -> &ConfigFile {
         &self.file
+    }
+
+    fn config_file_mut(&mut self) -> &mut ConfigFile {
+        &mut self.file
     }
 }
 
@@ -143,5 +155,96 @@ mod tests {
         let lines = file.lines();
         assert_eq!(lines.len(), 1);
         assert_eq!(lines[0], ("options", "splash=silent mitigations=auto"));
+    }
+
+    #[test]
+    fn test_systemd_entry_insert_update() {
+        let mut file = LoaderConfigFile::new("timeout 10").unwrap();
+        let lines = file.lines();
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0], ("timeout", "10"));
+
+        file.update_or_insert("timeout", "20");
+        let lines = file.lines();
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0], ("timeout", "20"));
+    }
+
+    #[test]
+    fn test_systemd_entry_insert_update_keepnl() {
+        let mut file = LoaderConfigFile::new("timeout 10\n").unwrap();
+        let lines = file.lines();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], ("timeout", "10"));
+        assert_eq!(lines[1], (""));
+
+        file.update_or_insert("timeout", "20");
+        let lines = file.lines();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], ("timeout", "20"));
+        assert_eq!(lines[1], (""));
+    }
+
+    #[test]
+    fn test_systemd_entry_insert_add() {
+        let mut file = LoaderConfigFile::new("timeout 10").unwrap();
+        let lines = file.lines();
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0], ("timeout", "10"));
+
+        file.update_or_insert("options", "foo=bar");
+        let lines = file.lines();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], ("timeout", "10"));
+        assert_eq!(lines[1], ("options", "foo=bar"));
+    }
+
+    #[test]
+    fn test_systemd_entry_insert_add_keepnl() {
+        let mut file = LoaderConfigFile::new("timeout 10\n").unwrap();
+        let lines = file.lines();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], ("timeout", "10"));
+        assert_eq!(lines[1], (""));
+
+        file.update_or_insert("options", "foo=bar");
+        let lines = file.lines();
+        assert_eq!(lines.len(), 3);
+        assert_eq!(lines[0], ("timeout", "10"));
+        assert_eq!(lines[1], ("options", "foo=bar"));
+        assert_eq!(lines[2], (""));
+    }
+
+    #[test]
+    fn test_systemd_entry_update_config() {
+        let mut file = LoaderConfigFile::new("timeout 10\n").unwrap();
+        let lines = file.lines();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], ("timeout", "10"));
+        assert_eq!(lines[1], (""));
+
+        let mut config = BootkitConfig::default();
+        config.timeout = Some(String::from("20"));
+        file.update_config(&config);
+        let lines = file.lines();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], ("timeout", "20"));
+        assert_eq!(lines[1], (""));
+    }
+
+    #[test]
+    fn test_systemd_entry_update_config_add() {
+        let mut file = LoaderConfigFile::new("foo bar").unwrap();
+        let lines = file.lines();
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0], ("foo", "bar"));
+
+        let mut config = BootkitConfig::default();
+        config.timeout = Some(String::from("20"));
+        file.update_config(&config);
+        let lines = file.lines();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], ("foo", "bar"));
+        assert_eq!(lines[1], ("timeout", "20"));
     }
 }
