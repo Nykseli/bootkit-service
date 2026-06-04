@@ -45,3 +45,35 @@ impl FileLine {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct ConfigFile {
+    lines: Vec<FileLine>,
+}
+
+impl ConfigFile {
+    pub fn new(lines: Vec<FileLine>) -> Self {
+        Self { lines }
+    }
+}
+
+pub trait ConfigFileParser {
+    fn format_config_line(line: &FileLine) -> String;
+    fn config_file(&self) -> &ConfigFile;
+
+    fn lines(&self) -> &[FileLine] {
+        &self.config_file().lines
+    }
+
+    fn get_key_value(&self, key: &str) -> Option<&KeyValue> {
+        self.lines()
+            .iter()
+            .filter_map(FileLine::key_value)
+            .find(|kv| kv.key == key)
+    }
+
+    fn as_string(&self) -> String {
+        let lines: Vec<String> = self.lines().iter().map(Self::format_config_line).collect();
+        lines.join("\n")
+    }
+}

@@ -1,7 +1,10 @@
 use sqlx::{Pool, Sqlite};
 
 use crate::{
-    bootloader::systemd_boot::{boot_entries::SystemdBootEntries, loader_config::LoaderConfigFile},
+    bootloader::{
+        parser::ConfigFileParser,
+        systemd_boot::{boot_entries::SystemdBootEntries, loader_config::LoaderConfigFile},
+    },
     data::{
         types::{
             BootkitBootEntries, BootkitBootEntry, BootkitConfig, BootkitSnapshot, BootkitSnapshots,

@@ -1,7 +1,7 @@
 use std::{fs::read_to_string, path::Path};
 
 use crate::{
-    bootloader::parser::{FileLine, KeyValue},
+    bootloader::parser::{ConfigFile, ConfigFileParser, FileLine, KeyValue},
     dctx,
     errors::{DError, DRes, DResult},
 };
@@ -30,24 +30,11 @@ fn parse_config_line(line_num: usize, line: &str) -> DResult<KeyValue> {
     Ok(KeyValue::new(line_num, line, key, value))
 }
 
-fn format_config_line(line: &FileLine) -> String {
-    match line {
-        FileLine::KeyValue(key_value) => {
-            if key_value.changed() {
-                key_value.original().into()
-            } else {
-                format!("{} {}", key_value.key, key_value.value)
-            }
-        }
-        FileLine::String { raw_line } => raw_line.into(),
-    }
-}
-
 /// systemd-boot loader config file
 /// usually located at /boot/efi/loader/loader.conf
 #[derive(Debug, Clone)]
 pub struct LoaderConfigFile {
-    lines: Vec<FileLine>,
+    file: ConfigFile,
 }
 
 impl LoaderConfigFile {
@@ -71,7 +58,9 @@ impl LoaderConfigFile {
             lines.push(FileLine::KeyValue(keyval));
         }
 
-        Ok(Self { lines })
+        Ok(Self {
+            file: ConfigFile::new(lines),
+        })
     }
 
     pub fn from_file<P: AsRef<Path>>(path: P) -> DResult<Self> {
@@ -79,21 +68,24 @@ impl LoaderConfigFile {
             .ctx(dctx!(), format!("Error reading {:?}", path.as_ref()))?;
         Self::new(&file)
     }
+}
 
-    pub fn lines(&self) -> &[FileLine] {
-        &self.lines
+impl ConfigFileParser for LoaderConfigFile {
+    fn format_config_line(line: &FileLine) -> String {
+        match line {
+            FileLine::KeyValue(key_value) => {
+                if key_value.changed() {
+                    key_value.original().into()
+                } else {
+                    format!("{} {}", key_value.key, key_value.value)
+                }
+            }
+            FileLine::String { raw_line } => raw_line.into(),
+        }
     }
 
-    pub fn get_key_value(&self, key: &str) -> Option<&KeyValue> {
-        self.lines()
-            .iter()
-            .filter_map(FileLine::key_value)
-            .find(|kv| kv.key == key)
-    }
-
-    pub fn as_string(&self) -> String {
-        let lines: Vec<String> = self.lines().iter().map(format_config_line).collect();
-        lines.join("\n")
+    fn config_file(&self) -> &ConfigFile {
+        &self.file
     }
 }
 

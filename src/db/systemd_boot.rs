@@ -3,9 +3,12 @@ use serde::Serialize;
 use sqlx::{Pool, Sqlite};
 
 use crate::{
-    bootloader::systemd_boot::{
-        boot_entries::{SystemdBootEntries, SystemdBootEntry},
-        loader_config::LoaderConfigFile,
+    bootloader::{
+        parser::ConfigFileParser,
+        systemd_boot::{
+            boot_entries::{SystemdBootEntries, SystemdBootEntry},
+            loader_config::LoaderConfigFile,
+        },
     },
     config::{DATABASE_PATH, SYSTEMD_CFG_PATH},
     dctx,

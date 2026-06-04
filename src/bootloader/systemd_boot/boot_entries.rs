@@ -1,7 +1,7 @@
 use std::fs::{read, read_dir};
 
 use crate::{
-    bootloader::systemd_boot::loader_config::LoaderConfigFile,
+    bootloader::{parser::ConfigFileParser, systemd_boot::loader_config::LoaderConfigFile},
     dctx,
     errors::{DError, DRes, DResOption, DResult},
 };
