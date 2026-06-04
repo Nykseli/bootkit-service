@@ -26,9 +26,6 @@ pub struct SystemdBootSnapshot {
     pub entry_config: String,
     /// selected entry config name
     pub selected_entry: String,
-    /// kernel args for the selected kernel
-    /// systemd-boot ties kernel args to the boot entry
-    pub kernel_arguments: Option<String>,
     /// when snapshot was created
     pub created: NaiveDateTime,
 }
@@ -146,15 +143,13 @@ pub async fn save_systemd_boot(
     entry: &EntryConfigFile,
 ) -> DResult<()> {
     let selected_entry = entry.name();
-    let kernel_arguments = entry.options();
     let entry_config = entry.as_string();
     let loader_config = conf.as_string();
 
     sqlx::query!(
-        "INSERT INTO systemd_boot_snapshot (loader_config, selected_entry, kernel_arguments, entry_config) VALUES (?, ?, ?, ?)",
+        "INSERT INTO systemd_boot_snapshot (loader_config, selected_entry, entry_config) VALUES (?, ?, ?)",
         loader_config,
         selected_entry,
-        kernel_arguments,
         entry_config,
     )
     .execute(pool)
