@@ -41,7 +41,7 @@ impl BootkitDataHandler for SystemdDataHandler {
             .await
             .ctx(dctx!(), "Failed to fetch latest snapshot")?;
 
-        let loader_conf = LoaderConfigFile::new(&snapshot.loader_config)
+        let loader_conf = LoaderConfigFile::new(SYSTEMD_CFG_PATH, &snapshot.loader_config)
             .ctx(dctx!(), "Failed to parse snapshot loader config")?;
 
         let timeout = loader_conf
@@ -139,7 +139,7 @@ impl BootkitDataHandler for SystemdDataHandler {
 
         entry_config.update_config(config);
         entry_config
-            .save(&entry_config.path)
+            .save()
             .ctx(dctx!(), "Failed to save kernel entry config")?;
 
         // TODO: edit the selected/current snapshot instead?
@@ -149,7 +149,7 @@ impl BootkitDataHandler for SystemdDataHandler {
 
         loader_config.update_config(config);
         loader_config
-            .save(SYSTEMD_CFG_PATH)
+            .save()
             .ctx(dctx!(), "Failed to save systemd-boot loader config")?;
 
         self.db
