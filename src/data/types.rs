@@ -34,6 +34,24 @@ impl BootkitConfig {
     pub fn serialize(&self) -> DResult<String> {
         serde_json::to_string(self).ctx(dctx!(), "Failed to serialize BootkitConfig")
     }
+
+    /// json string -> BootkitConfig
+    pub fn deserialize(json: &str) -> DResult<Self> {
+        serde_json::from_str(json).ctx(dctx!(), "Failed to deserialize BootkitConfig")
+    }
+}
+
+impl Default for BootkitConfig {
+    fn default() -> Self {
+        Self {
+            timeout: Default::default(),
+            boot_entries: BootkitBootEntries {
+                selected: None,
+                boot_entries: vec![],
+            },
+            kernel_arguments: Default::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
