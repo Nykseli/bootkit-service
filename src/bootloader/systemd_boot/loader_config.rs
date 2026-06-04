@@ -1,4 +1,7 @@
-use std::{fs::read_to_string, path::Path};
+use std::{
+    fs::read_to_string,
+    path::{Path, PathBuf},
+};
 
 use crate::{
     bootloader::parser::{ConfigFile, ConfigFileParser, FileLine, KeyValue},
@@ -39,7 +42,7 @@ pub struct LoaderConfigFile {
 }
 
 impl LoaderConfigFile {
-    pub fn new(file: &str) -> DResult<Self> {
+    pub fn new<P: Into<PathBuf>>(path: P, file: &str) -> DResult<Self> {
         let mut lines = Vec::new();
 
         // use split instead of lines to save the trailing empty new line
@@ -60,14 +63,14 @@ impl LoaderConfigFile {
         }
 
         Ok(Self {
-            file: ConfigFile::new(lines),
+            file: ConfigFile::new(path, lines),
         })
     }
 
     pub fn from_file<P: AsRef<Path>>(path: P) -> DResult<Self> {
         let file = read_to_string(path.as_ref())
             .ctx(dctx!(), format!("Error reading {:?}", path.as_ref()))?;
-        Self::new(&file)
+        Self::new(path.as_ref(), &file)
     }
 
     pub fn update_config(&mut self, config: &BootkitConfig) {
@@ -118,7 +121,7 @@ mod tests {
 
     #[test]
     fn test_systemd_config_parsing_no_eol() {
-        let file = LoaderConfigFile::new("timeout 10").unwrap();
+        let file = LoaderConfigFile::new("", "timeout 10").unwrap();
         let lines = file.lines();
         assert_eq!(lines.len(), 1);
         assert_eq!(lines[0], ("timeout", "10"));
@@ -126,7 +129,7 @@ mod tests {
 
     #[test]
     fn test_systemd_config_parsing_with_eol() {
-        let file = LoaderConfigFile::new("timeout 10\n").unwrap();
+        let file = LoaderConfigFile::new("", "timeout 10\n").unwrap();
         let lines = file.lines();
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0], ("timeout", "10"));
@@ -136,13 +139,13 @@ mod tests {
 
     #[test]
     fn test_systemd_config_parsing_fail() {
-        let err = LoaderConfigFile::new("timeout").unwrap_err();
+        let err = LoaderConfigFile::new("", "timeout").unwrap_err();
         assert_eq!(err.error().as_string(), "Error: Expected value on line: 1");
     }
 
     #[test]
     fn test_systemd_entry_spaces_in_values() {
-        let file = LoaderConfigFile::new("options    splash=silent mitigations=auto").unwrap();
+        let file = LoaderConfigFile::new("", "options    splash=silent mitigations=auto").unwrap();
         let lines = file.lines();
         assert_eq!(lines.len(), 1);
         assert_eq!(lines[0], ("options", "splash=silent mitigations=auto"));
@@ -150,7 +153,7 @@ mod tests {
 
     #[test]
     fn test_systemd_entry_insert_update() {
-        let mut file = LoaderConfigFile::new("timeout 10").unwrap();
+        let mut file = LoaderConfigFile::new("", "timeout 10").unwrap();
         let lines = file.lines();
         assert_eq!(lines.len(), 1);
         assert_eq!(lines[0], ("timeout", "10"));
@@ -163,7 +166,7 @@ mod tests {
 
     #[test]
     fn test_systemd_entry_insert_update_keepnl() {
-        let mut file = LoaderConfigFile::new("timeout 10\n").unwrap();
+        let mut file = LoaderConfigFile::new("", "timeout 10\n").unwrap();
         let lines = file.lines();
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0], ("timeout", "10"));
@@ -178,7 +181,7 @@ mod tests {
 
     #[test]
     fn test_systemd_entry_insert_add() {
-        let mut file = LoaderConfigFile::new("timeout 10").unwrap();
+        let mut file = LoaderConfigFile::new("", "timeout 10").unwrap();
         let lines = file.lines();
         assert_eq!(lines.len(), 1);
         assert_eq!(lines[0], ("timeout", "10"));
@@ -192,7 +195,7 @@ mod tests {
 
     #[test]
     fn test_systemd_entry_insert_add_keepnl() {
-        let mut file = LoaderConfigFile::new("timeout 10\n").unwrap();
+        let mut file = LoaderConfigFile::new("", "timeout 10\n").unwrap();
         let lines = file.lines();
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0], ("timeout", "10"));
@@ -208,7 +211,7 @@ mod tests {
 
     #[test]
     fn test_systemd_entry_update_config() {
-        let mut file = LoaderConfigFile::new("timeout 10\n").unwrap();
+        let mut file = LoaderConfigFile::new("", "timeout 10\n").unwrap();
         let lines = file.lines();
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0], ("timeout", "10"));
@@ -225,7 +228,7 @@ mod tests {
 
     #[test]
     fn test_systemd_entry_update_config_str() {
-        let mut file = LoaderConfigFile::new("timeout 10\n").unwrap();
+        let mut file = LoaderConfigFile::new("", "timeout 10\n").unwrap();
         let lines = file.lines();
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0], ("timeout", "10"));
@@ -243,7 +246,7 @@ mod tests {
 
     #[test]
     fn test_systemd_entry_update_config_add() {
-        let mut file = LoaderConfigFile::new("foo bar").unwrap();
+        let mut file = LoaderConfigFile::new("", "foo bar").unwrap();
         let lines = file.lines();
         assert_eq!(lines.len(), 1);
         assert_eq!(lines[0], ("foo", "bar"));
@@ -259,7 +262,7 @@ mod tests {
 
     #[test]
     fn test_systemd_entry_update_config_add_str() {
-        let mut file = LoaderConfigFile::new("foo bar").unwrap();
+        let mut file = LoaderConfigFile::new("", "foo bar").unwrap();
         let lines = file.lines();
         assert_eq!(lines.len(), 1);
         assert_eq!(lines[0], ("foo", "bar"));

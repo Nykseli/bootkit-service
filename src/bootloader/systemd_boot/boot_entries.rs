@@ -1,6 +1,6 @@
 use std::{
     fs::{read, read_dir, read_to_string},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use crate::{
@@ -121,11 +121,10 @@ fn parse_config_line(line_num: usize, line: &str) -> DResult<KeyValue> {
 #[derive(Debug, Clone)]
 pub struct EntryConfigFile {
     file: ConfigFile,
-    pub path: String,
 }
 
 impl EntryConfigFile {
-    fn new(file: &str, path: String) -> DResult<Self> {
+    fn new(path: PathBuf, file: &str) -> DResult<Self> {
         let mut lines = Vec::new();
 
         // use split instead of lines to save the trailing empty new line
@@ -148,15 +147,14 @@ impl EntryConfigFile {
         }
 
         Ok(Self {
-            path,
-            file: ConfigFile::new(lines),
+            file: ConfigFile::new(path, lines),
         })
     }
 
     pub fn from_file<P: AsRef<Path>>(path: P) -> DResult<Self> {
         let file = read_to_string(path.as_ref())
             .ctx(dctx!(), format!("Error reading {:?}", path.as_ref()))?;
-        Self::new(&file, path.as_ref().to_str().unwrap().to_string())
+        Self::new(path.as_ref().into(), &file)
     }
 
     pub fn update_config(&mut self, config: &BootkitConfig) {

@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write, path::Path};
+use std::{fs::File, io::Write, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -75,12 +75,16 @@ impl FileLine {
 
 #[derive(Debug, Clone)]
 pub struct ConfigFile {
+    path: PathBuf,
     lines: Vec<FileLine>,
 }
 
 impl ConfigFile {
-    pub fn new(lines: Vec<FileLine>) -> Self {
-        Self { lines }
+    pub fn new<P: Into<PathBuf>>(path: P, lines: Vec<FileLine>) -> Self {
+        Self {
+            lines,
+            path: path.into(),
+        }
     }
 
     fn has_trailing_new_line(&self) -> bool {
@@ -126,6 +130,10 @@ pub trait ConfigFileParser {
         }
     }
 
+    fn path(&self) -> &PathBuf {
+        &self.config_file().path
+    }
+
     fn lines(&self) -> &[FileLine] {
         &self.config_file().lines
     }
@@ -162,20 +170,17 @@ pub trait ConfigFileParser {
         };
     }
 
-    // TODO: add the path to be part of ConfigFile
-    fn save<P: AsRef<Path>>(&self, path: P) -> DResult<()> {
-        log::debug!("Writing to file {:?}", path.as_ref());
+    fn save(&self) -> DResult<()> {
+        let path = self.path();
+        log::debug!("Writing to file {path:?}");
 
-        let mut file = File::create(path.as_ref()).ctx(
+        let mut file = File::create(path).ctx(
             dctx!(),
-            format!("Couldn't open file '{:?}' for reading", path.as_ref()),
+            format!("Couldn't open file '{path:?}' for reading"),
         )?;
 
         let content = self.as_string();
         log::trace!("Writen content:\n{content}");
-        write!(file, "{}", content).ctx(
-            dctx!(),
-            format!("Failed to write to file '{:?}'", path.as_ref()),
-        )
+        write!(file, "{}", content).ctx(dctx!(), format!("Failed to write to file '{path:?}'"))
     }
 }
