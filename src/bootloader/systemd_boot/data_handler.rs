@@ -4,7 +4,7 @@ use crate::{
     bootloader::{
         parser::ConfigFileParser,
         systemd_boot::{
-            boot_entries::{SystemdBootEntries, SystemdBootEntry},
+            boot_entries::{EntryConfigFile, SystemdBootEntries},
             loader_config::LoaderConfigFile,
         },
     },
@@ -52,13 +52,12 @@ impl BootkitDataHandler for SystemdDataHandler {
 
         // TODO: difference between system's selected entry and snapshot entry
         //       should be reported to user as it's not expected behavior
-        let kernel_arguments = snapshot.kernel_arguments.or(bootentries
-            .selected
-            .as_ref()
-            .and_then(|entry| entry.options().map(str::to_string)));
+        let kernel_arguments = snapshot
+            .kernel_arguments
+            .or(bootentries.selected.options().map(str::to_string));
         let selected_boot = snapshot
             .selected_kernel
-            .or(bootentries.selected.map(|entry| entry.name().to_string()));
+            .unwrap_or_else(|| bootentries.selected.name().to_string());
 
         let entries = bootentries
             .entries
@@ -73,7 +72,7 @@ impl BootkitDataHandler for SystemdDataHandler {
             timeout,
             kernel_arguments,
             boot_entries: BootkitBootEntries {
-                selected: selected_boot,
+                selected: Some(selected_boot),
                 boot_entries: entries,
             },
         })
@@ -130,15 +129,10 @@ impl BootkitDataHandler for SystemdDataHandler {
             "Expected kernel to be selected for systemd-boot snapshot",
         )?;
 
-        let mut entry = SystemdBootEntry::new(&selected_kernel)
+        let mut entry = EntryConfigFile::new(selected_kernel, &snapshot.entry_config)
             .ctx(dctx!(), "failed to get systemd boot entry")?;
-        let entry_config = entry
-            .file
-            .as_mut()
-            .ctx(dctx!(), "Cannot edit build-in sytemd-boot entry")?;
-
-        entry_config.update_config(config);
-        entry_config
+        entry.update_config(config);
+        entry
             .save()
             .ctx(dctx!(), "Failed to save kernel entry config")?;
 
@@ -153,7 +147,7 @@ impl BootkitDataHandler for SystemdDataHandler {
             .ctx(dctx!(), "Failed to save systemd-boot loader config")?;
 
         self.db
-            .save_systemd_boot(&loader_config, Some(&entry))
+            .save_systemd_boot(&loader_config, &entry)
             .await
             .ctx(dctx!(), "Failed to save systemd-boot snapshot")?;
 
