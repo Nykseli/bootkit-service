@@ -109,9 +109,22 @@ impl ConfigFile {
 }
 
 pub trait ConfigFileParser {
-    fn format_config_line(line: &FileLine) -> String;
+    fn format_key_value(key_value: &KeyValue) -> String;
     fn config_file(&self) -> &ConfigFile;
     fn config_file_mut(&mut self) -> &mut ConfigFile;
+
+    fn format_config_line(line: &FileLine) -> String {
+        match line {
+            FileLine::KeyValue(key_value) => {
+                if !key_value.changed() {
+                    key_value.original().into()
+                } else {
+                    Self::format_key_value(key_value)
+                }
+            }
+            FileLine::String { raw_line } => raw_line.into(),
+        }
+    }
 
     fn lines(&self) -> &[FileLine] {
         &self.config_file().lines

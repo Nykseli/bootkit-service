@@ -168,25 +168,16 @@ impl EntryConfigFile {
 }
 
 impl ConfigFileParser for EntryConfigFile {
-    fn format_config_line(line: &FileLine) -> String {
-        match line {
-            FileLine::KeyValue(key_value) => {
-                if !key_value.changed() {
-                    key_value.original().into()
-                } else {
-                    format!("{} {}", key_value.key, key_value.value)
-                }
-            }
-            FileLine::String { raw_line } => raw_line.into(),
-        }
-    }
-
     fn config_file(&self) -> &ConfigFile {
         &self.file
     }
 
     fn config_file_mut(&mut self) -> &mut ConfigFile {
         &mut self.file
+    }
+
+    fn format_key_value(key_value: &KeyValue) -> String {
+        format!("{} {}", key_value.key, key_value.value)
     }
 }
 
