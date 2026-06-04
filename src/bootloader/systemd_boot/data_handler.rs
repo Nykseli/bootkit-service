@@ -3,7 +3,9 @@ use sqlx::{Pool, Sqlite};
 use crate::{
     bootloader::systemd_boot::{boot_entries::SystemdBootEntries, loader_config::LoaderConfigFile},
     data::{
-        types::{BootkitBootEntries, BootkitBootEntry, BootkitConfig},
+        types::{
+            BootkitBootEntries, BootkitBootEntry, BootkitConfig, BootkitSnapshot, BootkitSnapshots,
+        },
         BootkitDataHandler,
     },
     db::systemd_boot::SystemdDb,
@@ -67,6 +69,34 @@ impl BootkitDataHandler for SystemdDataHandler {
                 selected: selected_boot,
                 boot_entries: entries,
             },
+        })
+    }
+
+    async fn get_snapshots(&self) -> DResult<BootkitSnapshots> {
+        let snapshots = self
+            .db
+            .snapshots()
+            .await
+            .ctx(dctx!(), "Failed to fetch snapshots")?;
+
+        let snapshots = snapshots
+            .into_iter()
+            .map(|snapshot| BootkitSnapshot {
+                id: snapshot.id,
+                created: snapshot.created,
+                config: snapshot.loader_config,
+                // TODO: read boot entry info to get more kernel data
+                kernel: snapshot.selected_kernel.map(|kernel| BootkitBootEntry {
+                    name: kernel,
+                    title: None,
+                }),
+            })
+            .collect();
+
+        Ok(BootkitSnapshots {
+            snapshots,
+            // TODO: get selected
+            selected: None,
         })
     }
 }

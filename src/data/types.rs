@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -32,5 +33,33 @@ impl BootkitConfig {
     /// Serialize config to json string
     pub fn serialize(&self) -> DResult<String> {
         serde_json::to_string(self).ctx(dctx!(), "Failed to serialize BootkitConfig")
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BootkitSnapshot {
+    /// Snapshot id from database
+    pub id: i64,
+    /// Timestamp from database
+    pub created: NaiveDateTime,
+    /// Raw bootloader specific config
+    pub config: String,
+    /// Selected kernel, None means default
+    pub kernel: Option<BootkitBootEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BootkitSnapshots {
+    /// ID if the selected snapshot. None means latest one is selected
+    pub selected: Option<i64>,
+    pub snapshots: Vec<BootkitSnapshot>,
+    // TODO: Raw config values for the specific bootloader
+    // TODO: config diff map "filname" -> "diff data"
+}
+
+impl BootkitSnapshots {
+    /// Serialize config to json string
+    pub fn serialize(&self) -> DResult<String> {
+        serde_json::to_string(self).ctx(dctx!(), "Failed to serialize BootkitSnapshot")
     }
 }

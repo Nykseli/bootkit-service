@@ -28,13 +28,26 @@ impl BootKitInfo {
 
 pub struct BootKitSnapshots {
     handler: DbusHandler,
+    systemd: SystemdDataHandler,
 }
 
 #[interface(name = "org.opensuse.bootkit.Snapshot")]
 impl BootKitSnapshots {
     async fn get_snapshots(&self) -> Result<String, fdo::Error> {
         log::debug!("Calling org.opensuse.bootkit.Snapshot GetSnapshots");
-        let data = self.handler.get_snapshots_json().await?;
+        let data = match BootloaderType::system_type() {
+            BootloaderType::Grub => self.handler.get_snapshots_json().await?,
+            BootloaderType::SystemdBoot => {
+                let snapshots = self
+                    .systemd
+                    .get_snapshots()
+                    .await
+                    .ctx(dctx!(), "Failed to get systemd-boot snapshots")?;
+                snapshots
+                    .serialize()
+                    .ctx(dctx!(), "Failed to to serialize systemd-boot snapshots")?
+            }
+        };
         Ok(data)
     }
 
@@ -115,6 +128,7 @@ pub async fn create_connection(args: &ConfigArgs, db: &Database) -> zbus::Result
     };
     let snapshots = BootKitSnapshots {
         handler: handler.clone(),
+        systemd: SystemdDataHandler::new(db.pool().clone()),
     };
     let bootentry = BootEntry { handler };
 
