@@ -38,6 +38,21 @@ impl SystemdDb {
         Self { pool }
     }
 
+    pub async fn snapshots(&self) -> DResult<Vec<SystemdBootSnapshot>> {
+        let snapshots = sqlx::query_as!(
+            SystemdBootSnapshot,
+            "SELECT * FROM systemd_boot_snapshot ORDER BY id DESC",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .ctx(
+            dctx!(),
+            "Cannot fetch snapshots from systemd_boot_snapshot table",
+        )?;
+
+        Ok(snapshots)
+    }
+
     pub async fn latest_snapshot(&self) -> DResult<SystemdBootSnapshot> {
         let snapshot = sqlx::query_as!(
             SystemdBootSnapshot,
