@@ -123,6 +123,12 @@ impl BootkitDataHandler for SystemdDataHandler {
             .await
             .ctx(dctx!(), "Failed to fetch snapshots")?;
 
+        let selected_id = self
+            .db
+            .selected_snapshot_id()
+            .await
+            .ctx(dctx!(), "Failed to fetch selected snapshot id")?;
+
         let snapshots = snapshots
             .into_iter()
             .map(|snapshot| BootkitSnapshot {
@@ -142,8 +148,7 @@ impl BootkitDataHandler for SystemdDataHandler {
 
         Ok(BootkitSnapshots {
             snapshots,
-            // TODO: get selected
-            selected: None,
+            selected: selected_id,
         })
     }
 

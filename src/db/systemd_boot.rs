@@ -11,6 +11,7 @@ use crate::{
         },
     },
     config::{DATABASE_PATH, SYSTEMD_CFG_PATH},
+    db::selected_snapshot::SelectedSnapshot,
     dctx,
     errors::{DRes, DResult},
 };
@@ -88,6 +89,15 @@ impl SystemdDb {
         )?;
 
         Ok(snapshot)
+    }
+
+    pub async fn selected_snapshot_id(&self) -> DResult<Option<i64>> {
+        let snapshot = sqlx::query_as!(SelectedSnapshot, "SELECT * FROM selected_snapshot",)
+            .fetch_one(&self.pool)
+            .await
+            .ctx(dctx!(), "Cannot fetch selected_snapshot table")?;
+
+        Ok(snapshot.systemd_boot_snapshot_id)
     }
 
     #[allow(dead_code)]
