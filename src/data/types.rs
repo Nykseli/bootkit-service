@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
@@ -60,8 +62,9 @@ pub struct BootkitSnapshot {
     pub id: i64,
     /// Timestamp from database
     pub created: NaiveDateTime,
-    /// Raw bootloader specific config
-    pub config: String,
+    /// Raw bootloader specific config(s)
+    /// File name -> config data
+    pub configs: HashMap<String, String>,
     /// Selected kernel, None means default
     pub kernel: Option<BootkitBootEntry>,
 }
