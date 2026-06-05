@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use sqlx::{Pool, Sqlite};
 
 use crate::{
@@ -89,7 +91,10 @@ impl BootkitDataHandler for SystemdDataHandler {
             .map(|snapshot| BootkitSnapshot {
                 id: snapshot.id,
                 created: snapshot.created,
-                config: snapshot.loader_config,
+                configs: HashMap::from([
+                    (SYSTEMD_CFG_PATH.to_string(), snapshot.loader_config),
+                    (snapshot.selected_entry.clone(), snapshot.entry_config),
+                ]),
                 // TODO: read boot entry info to get more kernel data
                 kernel: Some(BootkitBootEntry {
                     name: snapshot.selected_entry,
