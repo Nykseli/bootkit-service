@@ -131,6 +131,15 @@ impl SystemdDb {
         Ok(())
     }
 
+    pub async fn remove_snapshot(&self, id: i64) -> DResult<()> {
+        sqlx::query!("DELETE FROM systemd_boot_snapshot WHERE id=(?)", id)
+            .execute(&self.pool)
+            .await
+            .ctx(dctx!(), "Failed to remove snapshot for systemd-boot")?;
+
+        Ok(())
+    }
+
     pub async fn save_systemd_boot(
         &self,
         conf: &LoaderConfigFile,
