@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
+use similar::TextDiff;
 
 use crate::{
     dctx,
@@ -28,7 +29,6 @@ pub struct BootkitConfig {
     pub boot_entries: BootkitBootEntries,
     pub kernel_arguments: Option<String>,
     // TODO: Raw config values for the specific bootloader
-    // TODO: config diff map "filname" -> "diff data"
 }
 
 impl BootkitConfig {
@@ -57,6 +57,35 @@ impl Default for BootkitConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BootkitSnapshotConfig {
+    /// Config file contents
+    pub contents: String,
+    /// Difference compared to current config, if there's any
+    pub diff: Option<String>,
+}
+
+impl BootkitSnapshotConfig {
+    /// Compare contents to the reference and set the diff if there is any
+    pub fn with_diff<C: Into<String>, R: AsRef<str>>(contents: C, reference: R) -> Self {
+        let contents = contents.into();
+        let reference = reference.as_ref();
+        let text_diff = TextDiff::from_lines(contents.as_str(), reference)
+            .unified_diff()
+            .to_string();
+
+        // TextDiff doesn't have a better API for detecting if the files
+        // are identical so checking if the contents are empty is our best guess
+        let diff = if text_diff.trim().is_empty() {
+            None
+        } else {
+            Some(text_diff)
+        };
+
+        Self { contents, diff }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BootkitSnapshot {
     /// Snapshot id from database
     pub id: i64,
@@ -64,7 +93,7 @@ pub struct BootkitSnapshot {
     pub created: NaiveDateTime,
     /// Raw bootloader specific config(s)
     /// File name -> config data
-    pub configs: HashMap<String, String>,
+    pub configs: HashMap<String, BootkitSnapshotConfig>,
     /// Selected kernel, None means default
     pub kernel: Option<BootkitBootEntry>,
 }
@@ -74,8 +103,6 @@ pub struct BootkitSnapshots {
     /// ID if the selected snapshot. None means latest one is selected
     pub selected: Option<i64>,
     pub snapshots: Vec<BootkitSnapshot>,
-    // TODO: Raw config values for the specific bootloader
-    // TODO: config diff map "filname" -> "diff data"
 }
 
 impl BootkitSnapshots {

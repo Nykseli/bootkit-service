@@ -14,7 +14,7 @@ use crate::{
     data::{
         types::{
             BootkitBootEntries, BootkitBootEntry, BootkitConfig, BootkitSnapshot,
-            BootkitSnapshotSelect, BootkitSnapshots,
+            BootkitSnapshotConfig, BootkitSnapshotSelect, BootkitSnapshots,
         },
         BootkitDataHandler,
     },
@@ -23,6 +23,32 @@ use crate::{
     errors::{DError, DRes, DResult},
 };
 
+fn sytemd_snapshot_into_bootkit_snapshot(
+    snapshot: SystemdBootSnapshot,
+    comparison: &SystemdBootSnapshot,
+) -> BootkitSnapshot {
+    let configs = HashMap::from([
+        (
+            SYSTEMD_CFG_PATH.to_string(),
+            BootkitSnapshotConfig::with_diff(snapshot.loader_config, &comparison.loader_config),
+        ),
+        (
+            snapshot.selected_entry.clone(),
+            BootkitSnapshotConfig::with_diff(snapshot.entry_config, &comparison.entry_config),
+        ),
+    ]);
+
+    BootkitSnapshot {
+        configs,
+        id: snapshot.id,
+        created: snapshot.created,
+        // TODO: read boot entry info to get more kernel data
+        kernel: Some(BootkitBootEntry {
+            name: snapshot.selected_entry,
+            title: None,
+        }),
+    }
+}
 /// Helpers for the bootctl commands
 struct Bootctl {}
 
@@ -144,28 +170,20 @@ impl BootkitDataHandler for SystemdDataHandler {
             .snapshots()
             .await
             .ctx(dctx!(), "Failed to fetch snapshots")?;
-
         let selected_id = self
             .db
             .selected_snapshot_id()
             .await
             .ctx(dctx!(), "Failed to fetch selected snapshot id")?;
+        let current = self
+            .db
+            .current_snapshot()
+            .await
+            .ctx(dctx!(), "Failed to fetch current snapshot")?;
 
         let snapshots = snapshots
             .into_iter()
-            .map(|snapshot| BootkitSnapshot {
-                id: snapshot.id,
-                created: snapshot.created,
-                configs: HashMap::from([
-                    (SYSTEMD_CFG_PATH.to_string(), snapshot.loader_config),
-                    (snapshot.selected_entry.clone(), snapshot.entry_config),
-                ]),
-                // TODO: read boot entry info to get more kernel data
-                kernel: Some(BootkitBootEntry {
-                    name: snapshot.selected_entry,
-                    title: None,
-                }),
-            })
+            .map(|snapshot| sytemd_snapshot_into_bootkit_snapshot(snapshot, &current))
             .collect();
 
         Ok(BootkitSnapshots {
