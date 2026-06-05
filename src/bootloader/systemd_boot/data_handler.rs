@@ -53,6 +53,51 @@ fn sytemd_snapshot_into_bootkit_snapshot(
         }),
     })
 }
+
+fn entry_config_diffs(
+    snapshot: &SystemdBootSnapshot,
+    loader_config: &LoaderConfigFile,
+    entry_config: &EntryConfigFile,
+    system_entries: &SystemdBootEntries,
+) -> DResult<Option<HashMap<String, String>>> {
+    let system_loader = LoaderConfigFile::from_file(SYSTEMD_CFG_PATH)
+        .ctx(dctx!(), "Failed to parse system loader config")?;
+    let system_entry = EntryConfigFile::from_id(&snapshot.selected_entry)
+        .ctx(dctx!(), "Failed to parse system entry config")?;
+
+    let loader_diff = loader_config
+        .compare_diff(&system_loader)
+        .map(|diff| (SYSTEMD_CFG_PATH.to_string(), diff));
+    let system_diff = entry_config
+        .compare_diff(&system_entry)
+        // TODO: get the full file path
+        .map(|diff| (entry_config.id().to_string(), diff));
+
+    let kernel_diff = if snapshot.selected_entry != system_entries.selected.id() {
+        Some((
+            "systemd default entry".to_string(),
+            format!(
+                "{} -> {}",
+                snapshot.selected_entry,
+                system_entries.selected.id()
+            ),
+        ))
+    } else {
+        None
+    };
+
+    let diffs: HashMap<String, String> = [loader_diff, system_diff, kernel_diff]
+        .into_iter()
+        .flatten()
+        .collect();
+
+    if diffs.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(diffs))
+    }
+}
+
 /// Helpers for the bootctl commands
 struct Bootctl {}
 
@@ -144,8 +189,9 @@ impl BootkitDataHandler for SystemdDataHandler {
         let bootentries =
             SystemdBootEntries::new().ctx(dctx!(), "Failed to get systemd-boot bootentries")?;
 
-        // TODO: difference between system's selected entry and snapshot entry
-        //       should be reported to user as it's not expected behavior
+        let config_diffs = entry_config_diffs(&snapshot, &loader_conf, &entry_config, &bootentries)
+            .ctx(dctx!(), "Failed to generate config file diffs")?;
+
         let kernel_arguments = entry_config.options().map(str::to_string);
         let selected_entry = snapshot.selected_entry;
 
@@ -161,6 +207,7 @@ impl BootkitDataHandler for SystemdDataHandler {
         Ok(BootkitConfig {
             timeout,
             kernel_arguments,
+            config_diffs,
             boot_entries: BootkitBootEntries {
                 selected: Some(selected_entry),
                 boot_entries: entries,

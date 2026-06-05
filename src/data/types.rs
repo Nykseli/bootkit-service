@@ -28,6 +28,10 @@ pub struct BootkitConfig {
     pub timeout: Option<String>,
     pub boot_entries: BootkitBootEntries,
     pub kernel_arguments: Option<String>,
+    /// Possible mismatches of currently selected config and system's state.
+    /// Usually caused by 3rd party editing configs
+    /// (File) name -> diff data
+    pub config_diffs: Option<HashMap<String, String>>,
     // TODO: Raw config values for the specific bootloader
 }
 
@@ -52,6 +56,7 @@ impl Default for BootkitConfig {
                 boot_entries: vec![],
             },
             kernel_arguments: Default::default(),
+            config_diffs: None,
         }
     }
 }
