@@ -10,5 +10,6 @@ pub trait BootkitDataHandler {
     async fn save_config(&self, config: &BootkitConfig) -> DResult<()>;
     async fn get_snapshots(&self) -> DResult<BootkitSnapshots>;
     async fn select_snapshot(&self, select: &BootkitSnapshotSelect) -> DResult<()>;
+    async fn use_current_snapshot(&self) -> DResult<()>;
     async fn remove_snapshot(&self, select: &BootkitSnapshotSelect) -> DResult<()>;
 }

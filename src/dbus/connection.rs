@@ -98,7 +98,18 @@ impl BootKitSnapshots {
 
     async fn use_current_snapshot(&self) -> Result<String, fdo::Error> {
         log::debug!("Calling org.opensuse.bootkit.Snapshot UseCurrentSnapshot");
-        let data = self.handler.use_current_snapshot().await?;
+        let data = match BootloaderType::system_type() {
+            BootloaderType::Grub => self.handler.use_current_snapshot().await?,
+            BootloaderType::SystemdBoot => {
+                self.systemd
+                    .use_current_snapshot()
+                    .await
+                    .ctx(dctx!(), "Failed to use current systemd-boot snapshot")?;
+
+                // TODO: structured response?
+                String::from("ok")
+            }
+        };
         Ok(data)
     }
 }
