@@ -26,7 +26,12 @@ use crate::{
 fn sytemd_snapshot_into_bootkit_snapshot(
     snapshot: SystemdBootSnapshot,
     comparison: &SystemdBootSnapshot,
-) -> BootkitSnapshot {
+) -> DResult<BootkitSnapshot> {
+    let entry_file = EntryConfigFile::new(&snapshot.selected_entry, &snapshot.entry_config).ctx(
+        dctx!(),
+        "Failed to get entry config file from snapshot data",
+    )?;
+
     let configs = HashMap::from([
         (
             SYSTEMD_CFG_PATH.to_string(),
@@ -38,16 +43,15 @@ fn sytemd_snapshot_into_bootkit_snapshot(
         ),
     ]);
 
-    BootkitSnapshot {
+    Ok(BootkitSnapshot {
         configs,
         id: snapshot.id,
         created: snapshot.created,
-        // TODO: read boot entry info to get more kernel data
         kernel: Some(BootkitBootEntry {
+            title: entry_file.version().map(str::to_string),
             name: snapshot.selected_entry,
-            title: None,
         }),
-    }
+    })
 }
 /// Helpers for the bootctl commands
 struct Bootctl {}
@@ -181,10 +185,15 @@ impl BootkitDataHandler for SystemdDataHandler {
             .await
             .ctx(dctx!(), "Failed to fetch current snapshot")?;
 
-        let snapshots = snapshots
+        let snapshots: DResult<Vec<BootkitSnapshot>> = snapshots
             .into_iter()
             .map(|snapshot| sytemd_snapshot_into_bootkit_snapshot(snapshot, &current))
             .collect();
+
+        let snapshots = snapshots.ctx(
+            dctx!(),
+            "Failed to turn systemd-boot snapshot data into snapshots",
+        )?;
 
         Ok(BootkitSnapshots {
             snapshots,
