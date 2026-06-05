@@ -84,3 +84,15 @@ impl BootkitSnapshots {
         serde_json::to_string(self).ctx(dctx!(), "Failed to serialize BootkitSnapshot")
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BootkitSnapshotSelect {
+    pub snapshot_id: i64,
+}
+
+impl BootkitSnapshotSelect {
+    /// json string -> BootkitSnapshotSelect
+    pub fn deserialize(json: &str) -> DResult<Self> {
+        serde_json::from_str(json).ctx(dctx!(), "Failed to deserialize BootkitSnapshotSelect")
+    }
+}

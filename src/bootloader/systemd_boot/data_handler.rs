@@ -13,7 +13,8 @@ use crate::{
     config::SYSTEMD_CFG_PATH,
     data::{
         types::{
-            BootkitBootEntries, BootkitBootEntry, BootkitConfig, BootkitSnapshot, BootkitSnapshots,
+            BootkitBootEntries, BootkitBootEntry, BootkitConfig, BootkitSnapshot,
+            BootkitSnapshotSelect, BootkitSnapshots,
         },
         BootkitDataHandler,
     },
@@ -180,6 +181,43 @@ impl BootkitDataHandler for SystemdDataHandler {
             .ctx(dctx!(), "Failed to save systemd-boot snapshot")?;
 
         log::debug!("Successfully saved sytemd-boot config snapshot");
+        Ok(())
+    }
+
+    async fn select_snapshot(&self, select: &BootkitSnapshotSelect) -> DResult<()> {
+        log::debug!("Start selecting sytemd-boot snapshot");
+        let snapshot = self
+            .db
+            .snapshot(select.snapshot_id)
+            .await
+            .ctx(dctx!(), "Failed to get systemd-boot snapshot")?;
+        log::trace!("Snapshot: {snapshot:?}");
+
+        // TODO: check if entry doesn't exist anymore
+        let snapshot_entry = EntryConfigFile::new(snapshot.selected_entry, &snapshot.entry_config)
+            .ctx(dctx!(), "Failed to get bootentry config from snapshot")?;
+        log::trace!("Snapshot boot entry: {snapshot_entry:#?}");
+
+        Bootctl::set_default(snapshot_entry.id())
+            .ctx(dctx!(), "Failed to set default entry with bootctl")?;
+
+        snapshot_entry
+            .save()
+            .ctx(dctx!(), "Failed to save kernel entry config")?;
+
+        let snapshot_config = LoaderConfigFile::new(SYSTEMD_CFG_PATH, &snapshot.loader_config)
+            .ctx(dctx!(), "Failed to parse systemd config")?;
+        snapshot_config
+            .save()
+            .ctx(dctx!(), "Failed to save systemd-boot loader config")?;
+
+        self.db
+            .set_selected_snapshot(Some(select.snapshot_id))
+            .await
+            .ctx(dctx!(), "Failed to set selected snapshot id to db")?;
+
+        log::debug!("Successfully selected sytemd-boot snapshot");
+
         Ok(())
     }
 }

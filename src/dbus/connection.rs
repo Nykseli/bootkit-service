@@ -3,7 +3,10 @@ use zbus::{connection::Builder, fdo, interface, object_server::SignalEmitter, Co
 use crate::{
     bootloader::{systemd_boot::data_handler::SystemdDataHandler, BootloaderType},
     config::ConfigArgs,
-    data::{types::BootkitConfig, BootkitDataHandler},
+    data::{
+        types::{BootkitConfig, BootkitSnapshotSelect},
+        BootkitDataHandler,
+    },
     db::Database,
     dbus::handler::DbusHandler,
     dctx,
@@ -59,7 +62,22 @@ impl BootKitSnapshots {
 
     async fn select_snapshot(&self, data: &str) -> Result<String, fdo::Error> {
         log::debug!("Calling org.opensuse.bootkit.Snapshot SelectSnapshot");
-        let data = self.handler.select_snapshot(data).await?;
+        let data = match BootloaderType::system_type() {
+            BootloaderType::Grub => self.handler.select_snapshot(data).await?,
+            BootloaderType::SystemdBoot => {
+                let select = BootkitSnapshotSelect::deserialize(data).ctx(
+                    dctx!(),
+                    "Failed to parse json data to BootkitSnapshotSelect",
+                )?;
+                self.systemd
+                    .select_snapshot(&select)
+                    .await
+                    .ctx(dctx!(), "Failed to slect systemd-boot snapshot")?;
+
+                // TODO: structured response?
+                String::from("ok")
+            }
+        };
         Ok(data)
     }
 
