@@ -1,6 +1,7 @@
 use std::{fs::File, io::Write, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
+use similar::TextDiff;
 
 use crate::{
     dctx,
@@ -191,5 +192,20 @@ pub trait ConfigFileParser {
         let content = self.as_string();
         log::trace!("Writen content:\n{content}");
         write!(file, "{}", content).ctx(dctx!(), format!("Failed to write to file '{path:?}'"))
+    }
+
+    fn compare_diff(&self, other: &Self) -> Option<String> {
+        // TODO: optimize this to accept strings/&str
+        let text_diff = TextDiff::from_lines(&self.as_string(), &other.as_string())
+            .unified_diff()
+            .to_string();
+
+        // TextDiff doesn't have a better API for detecting if the files
+        // are identical so checking if the contents are empty is our best guess
+        if text_diff.trim().is_empty() {
+            None
+        } else {
+            Some(text_diff)
+        }
     }
 }

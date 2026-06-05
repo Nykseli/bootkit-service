@@ -185,6 +185,11 @@ impl EntryConfigFile {
         Self::new(id, &file)
     }
 
+    pub fn from_id(id: &str) -> DResult<Self> {
+        let path = format!("{LOADER_ENTRIES_PATH}{id}");
+        Self::from_file(id.into(), &path).ctx(dctx!(), format!("Failed to load config from {path}"))
+    }
+
     pub fn update_config(&mut self, config: &BootkitConfig) {
         // TODO: should no kernel arguments mean we remove the option?
         if let Some(args) = &config.kernel_arguments {
