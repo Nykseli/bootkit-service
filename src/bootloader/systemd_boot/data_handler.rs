@@ -185,6 +185,11 @@ impl BootkitDataHandler for SystemdDataHandler {
             .await
             .ctx(dctx!(), "Failed to save systemd-boot snapshot")?;
 
+        self.db
+            .set_selected_snapshot(None)
+            .await
+            .ctx(dctx!(), "Failed to reset selected snapshot id")?;
+
         log::debug!("Successfully saved sytemd-boot config snapshot");
         Ok(())
     }
