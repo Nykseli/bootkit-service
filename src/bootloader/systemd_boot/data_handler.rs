@@ -150,7 +150,7 @@ impl BootkitDataHandler for SystemdDataHandler {
             .iter()
             .map(|entry| BootkitBootEntry {
                 name: entry.id().into(),
-                title: entry.title().map(str::to_string),
+                title: Some(entry.fancy_title()),
             })
             .collect();
 

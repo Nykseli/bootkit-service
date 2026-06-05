@@ -136,6 +136,8 @@ pub struct EntryConfigFile {
     title: Option<String>,
     /// specified kernel arguments if defined
     options: Option<String>,
+    /// entry version, usually referring to kernel version
+    version: Option<String>,
 }
 
 impl EntryConfigFile {
@@ -166,12 +168,14 @@ impl EntryConfigFile {
         let file = ConfigFile::new(path, lines);
         let title = file.get_key_value("title").map(|kv| kv.value.clone());
         let options = file.get_key_value("options").map(|kv| kv.value.clone());
+        let version = file.get_key_value("version").map(|kv| kv.value.clone());
 
         Ok(Self {
             file,
             id,
             title,
             options,
+            version,
         })
     }
 
@@ -199,6 +203,10 @@ impl EntryConfigFile {
 
     pub fn options(&self) -> Option<&str> {
         self.options.as_deref()
+    }
+
+    pub fn version(&self) -> Option<&str> {
+        self.version.as_deref()
     }
 }
 
@@ -273,10 +281,23 @@ impl SystemdBootEntry {
         }
     }
 
+    #[allow(dead_code)]
     pub fn title(&self) -> Option<&str> {
         match self {
             SystemdBootEntry::File(file) => file.title(),
             SystemdBootEntry::Auto(auto) => Some(&auto.title),
+        }
+    }
+
+    /// Display boot entry information that follows the systemd-boot menu style
+    pub fn fancy_title(&self) -> String {
+        match self {
+            SystemdBootEntry::Auto(auto) => auto.title.clone(),
+            SystemdBootEntry::File(file) => match (file.title(), file.version()) {
+                (Some(title), None) => format!("{title} ({})", file.id()),
+                (Some(title), Some(version)) => format!("{title} ({version})"),
+                _ => file.id().into(),
+            },
         }
     }
 
