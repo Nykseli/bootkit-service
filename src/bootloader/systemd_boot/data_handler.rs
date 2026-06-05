@@ -76,9 +76,9 @@ impl BootkitDataHandler for SystemdDataHandler {
     async fn get_config(&self) -> DResult<BootkitConfig> {
         let snapshot = self
             .db
-            .latest_snapshot()
+            .current_snapshot()
             .await
-            .ctx(dctx!(), "Failed to fetch latest snapshot")?;
+            .ctx(dctx!(), "Failed to fetch current snapshot")?;
 
         let loader_conf = LoaderConfigFile::new(SYSTEMD_CFG_PATH, &snapshot.loader_config)
             .ctx(dctx!(), "Failed to parse snapshot loader config")?;

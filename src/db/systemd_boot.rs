@@ -71,6 +71,26 @@ impl SystemdDb {
         Ok(snapshot)
     }
 
+    /// Get selected snapshot if seleced snapshot is specified, else return latest snapshot
+    pub async fn current_snapshot(&self) -> DResult<SystemdBootSnapshot> {
+        let snapshot = sqlx::query_as!(
+            SystemdBootSnapshot,
+            r#"SELECT id, loader_config, selected_entry, entry_config, created FROM systemd_boot_snapshot
+            INNER JOIN selected_snapshot on id =
+            CASE WHEN selected_snapshot.systemd_boot_snapshot_id IS NULL THEN id ELSE selected_snapshot.systemd_boot_snapshot_id END
+            ORDER BY id DESC LIMIT 1"#
+        )
+        .fetch_one(&self.pool)
+        .await
+        .ctx(
+            dctx!(),
+            "Cannot fetch snapshot from systemd_boot_snapshot table",
+        )?;
+
+        Ok(snapshot)
+    }
+
+    #[allow(dead_code)]
     pub async fn latest_snapshot(&self) -> DResult<SystemdBootSnapshot> {
         let snapshot = sqlx::query_as!(
             SystemdBootSnapshot,
