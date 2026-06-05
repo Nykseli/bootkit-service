@@ -294,6 +294,13 @@ impl SystemdBootEntry {
             _ => None,
         }
     }
+
+    pub fn into_file(self) -> Option<EntryConfigFile> {
+        match self {
+            SystemdBootEntry::File(file) => Some(file),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -333,5 +340,36 @@ impl SystemdBootEntries {
         log::trace!("Found systemd-boot selected entry: {selected:#?}");
 
         Ok(Self { entries, selected })
+    }
+
+    /// Find selected kernel from config if definied.
+    /// Get the entry selected in the system if config is not defined.
+    ///
+    /// Fails if selected kernel from config is not found
+    /// OR if config is auto entry
+    pub fn selected_config_file(config: &BootkitConfig) -> DResult<EntryConfigFile> {
+        let boot_entries = Self::new().ctx(dctx!(), "Failed to get systemd-boot entries")?;
+        let selected_entry = if let Some(selected) = &config.boot_entries.selected {
+            boot_entries
+                .entries
+                .into_iter()
+                .find(|entry| entry.name() == selected)
+                .ctx(
+                    dctx!(),
+                    format!("Couldn't find systemd-boot entry '{selected}'"),
+                )?
+                .into_file()
+                .ctx(
+                    dctx!(),
+                    "Selecting Automatic boot entry for systemd-boot is not supported",
+                )?
+        } else {
+            boot_entries.selected.into_file().ctx(
+                dctx!(),
+                "Automatic boot entry is selected for systemd-boot as default. Please select valid boot entry",
+            )?
+        };
+
+        Ok(selected_entry)
     }
 }

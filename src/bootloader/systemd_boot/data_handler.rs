@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, process::Command};
 
 use sqlx::{Pool, Sqlite};
 
@@ -19,8 +19,44 @@ use crate::{
     },
     db::systemd_boot::SystemdDb,
     dctx,
-    errors::{DRes, DResult},
+    errors::{DError, DRes, DResult},
 };
+
+/// Helpers for the bootctl commands
+struct Bootctl {}
+
+impl Bootctl {
+    /// Helper for `bootctl set-default <id>
+    ///
+    /// Note that the command will accept ANY id as valid.
+    /// Make sure the id is actually valid before calling this.
+    fn set_default(id: &str) -> DResult<()> {
+        let bootctl = Command::new("bootctl")
+            .arg("set-default")
+            .arg(id)
+            .output()
+            .ctx(dctx!(), "Failed to run bootctl set-default")?;
+
+        log::trace!("bootctl set-default {id} status: '{:?}'", bootctl.status);
+        log::trace!(
+            "bootctl set-default {id} stdout: '{}'",
+            String::from_utf8_lossy(&bootctl.stdout)
+        );
+        log::trace!(
+            "bootctl set-default {id} stderr: '{}'",
+            String::from_utf8_lossy(&bootctl.stderr)
+        );
+
+        if !bootctl.status.success() {
+            Err(DError::generic(
+                dctx!(),
+                format!("bootctl set-default {id} failed with {:?}", bootctl.status),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct SystemdDataHandler {
@@ -116,23 +152,15 @@ impl BootkitDataHandler for SystemdDataHandler {
         // TODO: if any of this fails, revert to original configs
         // TODO: check if the config has actual changes to avoid duplicate snapshots
 
-        // TODO: get selected snapshot if one is selected
-        let snapshot = self
-            .db
-            .latest_snapshot()
-            .await
-            .ctx(dctx!(), "Failed to fetch latest snapshot")?;
+        let mut selected_entry = SystemdBootEntries::selected_config_file(config)
+            .ctx(dctx!(), "Failed to get selected bootentry config")?;
+        log::trace!("Selected boot entry: {selected_entry:#?}");
 
-        // TODO: set/save selected kernel!
+        Bootctl::set_default(selected_entry.name())
+            .ctx(dctx!(), "Failed to set default entry with bootctl")?;
 
-        // TODO: Can we recover from kernel not being selected?
-        // TODO: add the assumption to DB that there's always a selected kernel entry
-        // TODO: use selected kernel from config, if none (Default), use the current one
-        let selected_entry = snapshot.selected_entry;
-        let mut entry = EntryConfigFile::new(selected_entry, &snapshot.entry_config)
-            .ctx(dctx!(), "failed to get systemd boot entry")?;
-        entry.update_config(config);
-        entry
+        selected_entry.update_config(config);
+        selected_entry
             .save()
             .ctx(dctx!(), "Failed to save kernel entry config")?;
 
@@ -147,7 +175,7 @@ impl BootkitDataHandler for SystemdDataHandler {
             .ctx(dctx!(), "Failed to save systemd-boot loader config")?;
 
         self.db
-            .save_systemd_boot(&loader_config, &entry)
+            .save_systemd_boot(&loader_config, &selected_entry)
             .await
             .ctx(dctx!(), "Failed to save systemd-boot snapshot")?;
 
