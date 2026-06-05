@@ -18,7 +18,7 @@ use crate::{
         },
         BootkitDataHandler,
     },
-    db::systemd_boot::SystemdDb,
+    db::systemd_boot::{SystemdBootSnapshot, SystemdDb},
     dctx,
     errors::{DError, DRes, DResult},
 };
@@ -69,6 +69,28 @@ impl SystemdDataHandler {
         Self {
             db: SystemdDb::new(pool),
         }
+    }
+
+    fn use_snapshot(&self, snapshot: SystemdBootSnapshot) -> DResult<()> {
+        // TODO: check if entry doesn't exist anymore
+        let snapshot_entry = EntryConfigFile::new(snapshot.selected_entry, &snapshot.entry_config)
+            .ctx(dctx!(), "Failed to get bootentry config from snapshot")?;
+        log::trace!("Snapshot boot entry: {snapshot_entry:#?}");
+
+        Bootctl::set_default(snapshot_entry.id())
+            .ctx(dctx!(), "Failed to set default entry with bootctl")?;
+
+        snapshot_entry
+            .save()
+            .ctx(dctx!(), "Failed to save kernel entry config")?;
+
+        let snapshot_config = LoaderConfigFile::new(SYSTEMD_CFG_PATH, &snapshot.loader_config)
+            .ctx(dctx!(), "Failed to parse systemd config")?;
+        snapshot_config
+            .save()
+            .ctx(dctx!(), "Failed to save systemd-boot loader config")?;
+
+        Ok(())
     }
 }
 
@@ -203,23 +225,8 @@ impl BootkitDataHandler for SystemdDataHandler {
             .ctx(dctx!(), "Failed to get systemd-boot snapshot")?;
         log::trace!("Snapshot: {snapshot:?}");
 
-        // TODO: check if entry doesn't exist anymore
-        let snapshot_entry = EntryConfigFile::new(snapshot.selected_entry, &snapshot.entry_config)
-            .ctx(dctx!(), "Failed to get bootentry config from snapshot")?;
-        log::trace!("Snapshot boot entry: {snapshot_entry:#?}");
-
-        Bootctl::set_default(snapshot_entry.id())
-            .ctx(dctx!(), "Failed to set default entry with bootctl")?;
-
-        snapshot_entry
-            .save()
-            .ctx(dctx!(), "Failed to save kernel entry config")?;
-
-        let snapshot_config = LoaderConfigFile::new(SYSTEMD_CFG_PATH, &snapshot.loader_config)
-            .ctx(dctx!(), "Failed to parse systemd config")?;
-        snapshot_config
-            .save()
-            .ctx(dctx!(), "Failed to save systemd-boot loader config")?;
+        self.use_snapshot(snapshot)
+            .ctx(dctx!(), "Failed to use selected snapshot")?;
 
         self.db
             .set_selected_snapshot(Some(select.snapshot_id))
@@ -228,6 +235,22 @@ impl BootkitDataHandler for SystemdDataHandler {
 
         log::debug!("Successfully selected sytemd-boot snapshot");
 
+        Ok(())
+    }
+
+    async fn use_current_snapshot(&self) -> DResult<()> {
+        // TODO: a lot of the logic should be shared with select snapshot
+        log::debug!("Start using current systemd-boot snapshot");
+        let snapshot = self
+            .db
+            .current_snapshot()
+            .await
+            .ctx(dctx!(), "Failed to get current systemd-boot snapshot")?;
+        log::trace!("Snapshot: {snapshot:?}");
+
+        self.use_snapshot(snapshot)
+            .ctx(dctx!(), "Failed to use current snapshot")?;
+        log::debug!("Successfully used current systemd-boot snapshot");
         Ok(())
     }
 
