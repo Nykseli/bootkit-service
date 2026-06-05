@@ -230,4 +230,29 @@ impl BootkitDataHandler for SystemdDataHandler {
 
         Ok(())
     }
+
+    async fn remove_snapshot(&self, select: &BootkitSnapshotSelect) -> DResult<()> {
+        log::debug!("Start removing sytemd-boot snapshot");
+        let current = self
+            .db
+            .current_snapshot()
+            .await
+            .ctx(dctx!(), "Failed to fetch current snapshot")?;
+
+        if current.id == select.snapshot_id {
+            return Err(DError::generic(
+                dctx!(),
+                "Cannot remove snapshot that's in use",
+            ));
+        }
+
+        self.db
+            .remove_snapshot(select.snapshot_id)
+            .await
+            .ctx(dctx!(), "Failed to remove snapshot")?;
+
+        log::debug!("Succesfully removed sytemd-boot snapshot");
+
+        Ok(())
+    }
 }

@@ -56,7 +56,22 @@ impl BootKitSnapshots {
 
     async fn remove_snapshot(&self, data: &str) -> Result<String, fdo::Error> {
         log::debug!("Calling org.opensuse.bootkit.Snapshot RemoveSnapshot");
-        let data = self.handler.remove_snapshot(data).await?;
+        let data = match BootloaderType::system_type() {
+            BootloaderType::Grub => self.handler.remove_snapshot(data).await?,
+            BootloaderType::SystemdBoot => {
+                let select = BootkitSnapshotSelect::deserialize(data).ctx(
+                    dctx!(),
+                    "Failed to parse json data to BootkitSnapshotSelect",
+                )?;
+                self.systemd
+                    .remove_snapshot(&select)
+                    .await
+                    .ctx(dctx!(), "Failed to slect systemd-boot snapshot")?;
+
+                // TODO: structured response?
+                String::from("ok")
+            }
+        };
         Ok(data)
     }
 
