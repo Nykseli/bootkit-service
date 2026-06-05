@@ -55,6 +55,22 @@ impl SystemdDb {
         Ok(snapshots)
     }
 
+    pub async fn snapshot(&self, id: i64) -> DResult<SystemdBootSnapshot> {
+        let snapshot = sqlx::query_as!(
+            SystemdBootSnapshot,
+            "SELECT * FROM systemd_boot_snapshot WHERE id=(?)",
+            id
+        )
+        .fetch_one(&self.pool)
+        .await
+        .ctx(
+            dctx!(),
+            "Cannot fetch snapshot with id '{id}' from systemd_boot_snapshot table",
+        )?;
+
+        Ok(snapshot)
+    }
+
     pub async fn latest_snapshot(&self) -> DResult<SystemdBootSnapshot> {
         let snapshot = sqlx::query_as!(
             SystemdBootSnapshot,
@@ -68,6 +84,21 @@ impl SystemdDb {
         )?;
 
         Ok(snapshot)
+    }
+
+    pub async fn set_selected_snapshot(&self, id: Option<i64>) -> DResult<()> {
+        sqlx::query!(
+            "UPDATE selected_snapshot SET systemd_boot_snapshot_id=(?)",
+            id
+        )
+        .execute(&self.pool)
+        .await
+        .ctx(
+            dctx!(),
+            "Failed to update selected snapshot for systemd-boot",
+        )?;
+
+        Ok(())
     }
 
     pub async fn save_systemd_boot(
