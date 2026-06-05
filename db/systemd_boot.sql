@@ -3,7 +3,7 @@ CREATE TABLE systemd_boot_snapshot (
     id INTEGER PRIMARY KEY NOT NULL,
     -- /boot/efi/loader/loader.conf config
     loader_config TEXT NOT NULL,
-    -- selected entry config name
+    -- selected entry config id
     selected_entry TEXT NOT NULL,
     -- /boot/efi/loader/entries/ config data
     entry_config TEXT NOT NULL,

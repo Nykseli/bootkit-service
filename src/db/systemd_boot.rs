@@ -24,7 +24,7 @@ pub struct SystemdBootSnapshot {
     pub loader_config: String,
     /// /boot/efi/loader/entries/ config data
     pub entry_config: String,
-    /// selected entry config name
+    /// selected entry config id
     pub selected_entry: String,
     /// when snapshot was created
     pub created: NaiveDateTime,
@@ -142,7 +142,7 @@ pub async fn save_systemd_boot(
     conf: &LoaderConfigFile,
     entry: &EntryConfigFile,
 ) -> DResult<()> {
-    let selected_entry = entry.name();
+    let selected_entry = entry.id();
     let entry_config = entry.as_string();
     let loader_config = conf.as_string();
 

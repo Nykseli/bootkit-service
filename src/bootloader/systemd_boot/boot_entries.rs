@@ -119,8 +119,8 @@ fn parse_config_line(line_num: usize, line: &str) -> DResult<KeyValue> {
 /// See the table in Options -> default: https://www.freedesktop.org/software/systemd/man/latest/loader.conf.html
 #[derive(Debug, Clone)]
 pub struct EntryConfigAuto {
-    /// "raw" name of the auto detected entry
-    name: String,
+    /// "raw" id of the auto detected entry
+    id: String,
     /// pretty name of the entry,
     title: String,
 }
@@ -130,8 +130,8 @@ pub struct EntryConfigAuto {
 #[derive(Debug, Clone)]
 pub struct EntryConfigFile {
     file: ConfigFile,
-    /// name of the entry file, including .conf
-    name: String,
+    /// id of the entry file, including .conf
+    id: String,
     /// pretty name of the entry, if it exists
     title: Option<String>,
     /// specified kernel arguments if defined
@@ -139,8 +139,8 @@ pub struct EntryConfigFile {
 }
 
 impl EntryConfigFile {
-    pub fn new<N: Into<String>>(name: N, file: &str) -> DResult<Self> {
-        let name = name.into();
+    pub fn new<N: Into<String>>(id: N, file: &str) -> DResult<Self> {
+        let id = id.into();
         let mut lines = Vec::new();
 
         // use split instead of lines to save the trailing empty new line
@@ -162,23 +162,23 @@ impl EntryConfigFile {
             lines.push(FileLine::KeyValue(keyval));
         }
 
-        let path = format!("{LOADER_ENTRIES_PATH}{name}");
+        let path = format!("{LOADER_ENTRIES_PATH}{id}");
         let file = ConfigFile::new(path, lines);
         let title = file.get_key_value("title").map(|kv| kv.value.clone());
         let options = file.get_key_value("options").map(|kv| kv.value.clone());
 
         Ok(Self {
             file,
-            name,
+            id,
             title,
             options,
         })
     }
 
-    pub fn from_file<P: AsRef<Path>>(name: String, path: P) -> DResult<Self> {
+    pub fn from_file<P: AsRef<Path>>(id: String, path: P) -> DResult<Self> {
         let file = read_to_string(path.as_ref())
             .ctx(dctx!(), format!("Error reading {:?}", path.as_ref()))?;
-        Self::new(name, &file)
+        Self::new(id, &file)
     }
 
     pub fn update_config(&mut self, config: &BootkitConfig) {
@@ -189,8 +189,8 @@ impl EntryConfigFile {
         self.options = config.kernel_arguments.clone();
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn id(&self) -> &str {
+        &self.id
     }
 
     pub fn title(&self) -> Option<&str> {
@@ -226,13 +226,13 @@ pub enum SystemdBootEntry {
 }
 
 impl SystemdBootEntry {
-    pub fn from_name(name: &str) -> DResult<Self> {
-        if let Some(entry) = Self::auto_detected(name) {
+    pub fn from_id(id: &str) -> DResult<Self> {
+        if let Some(entry) = Self::auto_detected(id) {
             return Ok(entry);
         }
 
-        let path = format!("{LOADER_ENTRIES_PATH}{name}");
-        let file = EntryConfigFile::from_file(name.into(), &path)
+        let path = format!("{LOADER_ENTRIES_PATH}{id}");
+        let file = EntryConfigFile::from_file(id.into(), &path)
             .ctx(dctx!(), format!("Failed to load config from {path}"))?;
 
         Ok(Self::File(file))
@@ -241,20 +241,20 @@ impl SystemdBootEntry {
     /// Systemd-boot has auto detected boot entries, that we can autogenrate
     /// entry information for
     /// See the table in Options -> default: https://www.freedesktop.org/software/systemd/man/latest/loader.conf.html
-    fn auto_detected(name: &str) -> Option<Self> {
-        let title = if name == "auto-efi-default" {
+    fn auto_detected(id: &str) -> Option<Self> {
+        let title = if id == "auto-efi-default" {
             "EFI Default Loader"
-        } else if name == "auto-efi-shell" {
+        } else if id == "auto-efi-shell" {
             "EFI Shell"
-        } else if name == "auto-osx" {
+        } else if id == "auto-osx" {
             "macOS"
-        } else if name == "auto-poweroff" {
+        } else if id == "auto-poweroff" {
             "Power Off The System"
-        } else if name == "auto-reboot" {
+        } else if id == "auto-reboot" {
             "Reboot The System"
-        } else if name == "auto-reboot-to-firmware-setup" {
+        } else if id == "auto-reboot-to-firmware-setup" {
             "Reboot Into Firmware Interface"
-        } else if name == "auto-windows" {
+        } else if id == "auto-windows" {
             "Windows Boot Manager"
         } else {
             return None;
@@ -262,14 +262,14 @@ impl SystemdBootEntry {
 
         Some(Self::Auto(EntryConfigAuto {
             title: title.to_string(),
-            name: name.to_string(),
+            id: id.to_string(),
         }))
     }
 
-    pub fn name(&self) -> &str {
+    pub fn id(&self) -> &str {
         match self {
-            SystemdBootEntry::File(file) => &file.name,
-            SystemdBootEntry::Auto(auto) => &auto.name,
+            SystemdBootEntry::File(file) => &file.id,
+            SystemdBootEntry::Auto(auto) => &auto.id,
         }
     }
 
@@ -322,7 +322,7 @@ impl SystemdBootEntries {
         let entries: DResult<Vec<SystemdBootEntry>> = entries
             .data
             .iter()
-            .map(|name| SystemdBootEntry::from_name(name))
+            .map(|id| SystemdBootEntry::from_id(id))
             .collect();
         let entries = entries.ctx(dctx!(), "Failed to read and parse systemd-boot entries")?;
 
@@ -330,7 +330,7 @@ impl SystemdBootEntries {
             .flat_ctx(dctx!(), "Error reading LoaderEntryDefault efivariable")?;
         let selected = entries
             .iter()
-            .find(|entry| entry.name() == default.data[0])
+            .find(|entry| entry.id() == default.data[0])
             .ctx(
                 dctx!(),
                 "Couldn't find LoaderEntryDefault from LoaderEntries",
@@ -353,7 +353,7 @@ impl SystemdBootEntries {
             boot_entries
                 .entries
                 .into_iter()
-                .find(|entry| entry.name() == selected)
+                .find(|entry| entry.id() == selected)
                 .ctx(
                     dctx!(),
                     format!("Couldn't find systemd-boot entry '{selected}'"),

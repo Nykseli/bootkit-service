@@ -100,7 +100,7 @@ impl BootkitDataHandler for SystemdDataHandler {
             .entries
             .iter()
             .map(|entry| BootkitBootEntry {
-                name: entry.name().into(),
+                name: entry.id().into(),
                 title: entry.title().map(str::to_string),
             })
             .collect();
@@ -156,7 +156,7 @@ impl BootkitDataHandler for SystemdDataHandler {
             .ctx(dctx!(), "Failed to get selected bootentry config")?;
         log::trace!("Selected boot entry: {selected_entry:#?}");
 
-        Bootctl::set_default(selected_entry.name())
+        Bootctl::set_default(selected_entry.id())
             .ctx(dctx!(), "Failed to set default entry with bootctl")?;
 
         selected_entry.update_config(config);
