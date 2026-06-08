@@ -302,7 +302,26 @@ impl BootkitDataHandler for Grub2DataHandler {
     }
 
     async fn use_current_snapshot(&self) -> DResult<()> {
-        Err(DError::generic(dctx!(), "Not implemented"))
+        let selected = self.db.selected_snapshot().await?;
+        let selected_grub = if let Some(id) = selected.grub2_snapshot_id {
+            self.db
+                .grub2_snapshot(id)
+                .await
+                .ctx(dctx!(), "Failed to get grub snapshot")?
+        } else {
+            self.db
+                .latest_grub2()
+                .await
+                .ctx(dctx!(), "Failed to get current grub snapshot")?
+        };
+
+        let mut grub_config = Grub2ConfigFile::new(GRUB_FILE_PATH, &selected_grub.grub_config)
+            .ctx(dctx!(), "Failed to create grub2 config from snapshot data")?;
+
+        update_grub2_system_cfg(&mut grub_config, &selected_grub.selected_kernel, true)
+            .ctx(dctx!(), "Failed to update grub configuration")?;
+
+        Ok(())
     }
 
     async fn remove_snapshot(&self, _select: &BootkitSnapshotSelect) -> DResult<()> {
