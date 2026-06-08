@@ -96,7 +96,7 @@ fn update_grub2_config(grub_config: &Grub2ConfigFile) -> DResult<()> {
 fn update_grub2_system_cfg(
     grub_config: &mut Grub2ConfigFile,
     selected_kernel: &Option<String>,
-    // TODO: from_snapshot
+    from_snapshot: bool,
 ) -> DResult<()> {
     if let Some(kernel) = selected_kernel {
         let entries = Grub2BootEntries::new().ctx(dctx!(), "Failed to get grub boot entries")?;
@@ -111,8 +111,12 @@ fn update_grub2_system_cfg(
 
         set_default_kernel(entry.full_path()).ctx(dctx!(), "Failed to set default kernel")?;
 
-        // make sure GRUB_DEFAULT is set to saved as it's required by grub
-        grub_config.update_or_insert("GRUB_DEFAULT", "saved");
+        // Only update grub file when selecting a snapshot
+        // old snapshots should always be set back the way they were
+        if !from_snapshot {
+            // make sure GRUB_DEFAULT is set to saved as it's required by grub
+            grub_config.update_or_insert("GRUB_DEFAULT", "saved");
+        }
     } else {
         unset_default_kernel().ctx(dctx!(), "Failed to unset default kernel")?;
     }
@@ -213,7 +217,7 @@ impl BootkitDataHandler for Grub2DataHandler {
             grub_config.set_kernel_arguments(args);
         }
 
-        update_grub2_system_cfg(&mut grub_config, &config.boot_entries.selected)
+        update_grub2_system_cfg(&mut grub_config, &config.boot_entries.selected, false)
             .ctx(dctx!(), "Failed to update grub configuration")?;
 
         self.db
@@ -275,8 +279,26 @@ impl BootkitDataHandler for Grub2DataHandler {
         })
     }
 
-    async fn select_snapshot(&self, _select: &BootkitSnapshotSelect) -> DResult<()> {
-        Err(DError::generic(dctx!(), "Not implemented"))
+    async fn select_snapshot(&self, select: &BootkitSnapshotSelect) -> DResult<()> {
+        // TODO: do not reselect currently selected snapshot
+        let snapshot = self
+            .db
+            .grub2_snapshot(select.snapshot_id)
+            .await
+            .ctx(dctx!(), "Failed to find grub2 snapshot")?;
+
+        let mut grub_config = Grub2ConfigFile::new(GRUB_FILE_PATH, &snapshot.grub_config)
+            .ctx(dctx!(), "Failed to create grub2 config from snapshot data")?;
+
+        update_grub2_system_cfg(&mut grub_config, &snapshot.selected_kernel, true)
+            .ctx(dctx!(), "Failed to update grub configuration")?;
+
+        self.db
+            .set_selected_snapshot(Some(select.snapshot_id))
+            .await
+            .ctx(dctx!(), "Failed to reset selected grub2 snapshot")?;
+
+        Ok(())
     }
 
     async fn use_current_snapshot(&self) -> DResult<()> {
