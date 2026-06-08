@@ -3,11 +3,21 @@ use std::{
     sync::OnceLock,
 };
 
+use sqlx::{Pool, Sqlite};
+
 use crate::{
+    bootloader::{
+        grub2::data_handler::Grub2DataHandler, systemd_boot::data_handler::SystemdDataHandler,
+    },
+    data::{
+        types::{BootkitConfig, BootkitSnapshotSelect, BootkitSnapshots},
+        BootkitDataHandler,
+    },
     dctx,
     errors::{DError, DRes, DResult},
 };
 
+pub mod grub2;
 pub mod parser;
 pub mod systemd_boot;
 
@@ -92,4 +102,65 @@ pub fn detect_bootloader() -> DResult<BootloaderType> {
     }
 
     Err(DError::generic(dctx!(), "Failed to detect bootloader type"))
+}
+
+/// Data handler enum for static async dispatching until
+/// async traits can be dynamically dispatched
+#[derive(Clone)]
+pub enum BootloaderDataHandler {
+    Grub2(Grub2DataHandler),
+    SystemdBoot(SystemdDataHandler),
+}
+
+impl BootloaderDataHandler {
+    pub fn from_loader_type(bootloader: BootloaderType, db: Pool<Sqlite>) -> Self {
+        match bootloader {
+            BootloaderType::Grub => Self::Grub2(Grub2DataHandler {}),
+            BootloaderType::SystemdBoot => Self::SystemdBoot(SystemdDataHandler::new(db)),
+        }
+    }
+}
+
+impl BootkitDataHandler for BootloaderDataHandler {
+    async fn get_config(&self) -> DResult<BootkitConfig> {
+        match self {
+            Self::Grub2(handler) => handler.get_config().await,
+            Self::SystemdBoot(handler) => handler.get_config().await,
+        }
+    }
+
+    async fn save_config(&self, config: &BootkitConfig) -> DResult<()> {
+        match self {
+            Self::Grub2(handler) => handler.save_config(config).await,
+            Self::SystemdBoot(handler) => handler.save_config(config).await,
+        }
+    }
+
+    async fn get_snapshots(&self) -> DResult<BootkitSnapshots> {
+        match self {
+            Self::Grub2(handler) => handler.get_snapshots().await,
+            Self::SystemdBoot(handler) => handler.get_snapshots().await,
+        }
+    }
+
+    async fn select_snapshot(&self, select: &BootkitSnapshotSelect) -> DResult<()> {
+        match self {
+            Self::Grub2(handler) => handler.select_snapshot(select).await,
+            Self::SystemdBoot(handler) => handler.select_snapshot(select).await,
+        }
+    }
+
+    async fn use_current_snapshot(&self) -> DResult<()> {
+        match self {
+            Self::Grub2(handler) => handler.use_current_snapshot().await,
+            Self::SystemdBoot(handler) => handler.use_current_snapshot().await,
+        }
+    }
+
+    async fn remove_snapshot(&self, select: &BootkitSnapshotSelect) -> DResult<()> {
+        match self {
+            Self::Grub2(handler) => handler.remove_snapshot(select).await,
+            Self::SystemdBoot(handler) => handler.remove_snapshot(select).await,
+        }
+    }
 }

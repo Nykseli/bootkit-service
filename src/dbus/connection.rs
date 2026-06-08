@@ -1,7 +1,7 @@
 use zbus::{connection::Builder, fdo, interface, object_server::SignalEmitter, Connection};
 
 use crate::{
-    bootloader::{systemd_boot::data_handler::SystemdDataHandler, BootloaderType},
+    bootloader::{BootloaderDataHandler, BootloaderType},
     config::ConfigArgs,
     data::{
         types::{BootkitConfig, BootkitSnapshotSelect},
@@ -30,134 +30,99 @@ impl BootKitInfo {
 }
 
 pub struct BootKitSnapshots {
-    handler: DbusHandler,
-    systemd: SystemdDataHandler,
+    handler: BootloaderDataHandler,
 }
 
 #[interface(name = "org.opensuse.bootkit.Snapshot")]
 impl BootKitSnapshots {
     async fn get_snapshots(&self) -> Result<String, fdo::Error> {
         log::debug!("Calling org.opensuse.bootkit.Snapshot GetSnapshots");
-        let data = match BootloaderType::system_type() {
-            BootloaderType::Grub => self.handler.get_snapshots_json().await?,
-            BootloaderType::SystemdBoot => {
-                let snapshots = self
-                    .systemd
-                    .get_snapshots()
-                    .await
-                    .ctx(dctx!(), "Failed to get systemd-boot snapshots")?;
-                snapshots
-                    .serialize()
-                    .ctx(dctx!(), "Failed to to serialize systemd-boot snapshots")?
-            }
-        };
+
+        let data = self
+            .handler
+            .get_snapshots()
+            .await
+            .ctx(dctx!(), "Failed to get bootloader snapshots")?
+            .serialize()
+            .ctx(dctx!(), "Failed to serialise bootloader snapshots")?;
+
         Ok(data)
     }
 
     async fn remove_snapshot(&self, data: &str) -> Result<String, fdo::Error> {
         log::debug!("Calling org.opensuse.bootkit.Snapshot RemoveSnapshot");
-        let data = match BootloaderType::system_type() {
-            BootloaderType::Grub => self.handler.remove_snapshot(data).await?,
-            BootloaderType::SystemdBoot => {
-                let select = BootkitSnapshotSelect::deserialize(data).ctx(
-                    dctx!(),
-                    "Failed to parse json data to BootkitSnapshotSelect",
-                )?;
-                self.systemd
-                    .remove_snapshot(&select)
-                    .await
-                    .ctx(dctx!(), "Failed to slect systemd-boot snapshot")?;
+        let select = BootkitSnapshotSelect::deserialize(data).ctx(
+            dctx!(),
+            "Failed to parse json data to BootkitSnapshotSelect",
+        )?;
 
-                // TODO: structured response?
-                String::from("ok")
-            }
-        };
-        Ok(data)
+        self.handler
+            .remove_snapshot(&select)
+            .await
+            .ctx(dctx!(), "Failed to remove bootloader snapshot")?;
+
+        // TODO: structured response?
+        Ok(String::from("ok"))
     }
 
     async fn select_snapshot(&self, data: &str) -> Result<String, fdo::Error> {
         log::debug!("Calling org.opensuse.bootkit.Snapshot SelectSnapshot");
-        let data = match BootloaderType::system_type() {
-            BootloaderType::Grub => self.handler.select_snapshot(data).await?,
-            BootloaderType::SystemdBoot => {
-                let select = BootkitSnapshotSelect::deserialize(data).ctx(
-                    dctx!(),
-                    "Failed to parse json data to BootkitSnapshotSelect",
-                )?;
-                self.systemd
-                    .select_snapshot(&select)
-                    .await
-                    .ctx(dctx!(), "Failed to slect systemd-boot snapshot")?;
+        let select = BootkitSnapshotSelect::deserialize(data).ctx(
+            dctx!(),
+            "Failed to parse json data to BootkitSnapshotSelect",
+        )?;
 
-                // TODO: structured response?
-                String::from("ok")
-            }
-        };
-        Ok(data)
+        self.handler
+            .select_snapshot(&select)
+            .await
+            .ctx(dctx!(), "Failed to select bootloader snapshot")?;
+
+        // TODO: structured response?
+        Ok(String::from("ok"))
     }
 
     async fn use_current_snapshot(&self) -> Result<String, fdo::Error> {
         log::debug!("Calling org.opensuse.bootkit.Snapshot UseCurrentSnapshot");
-        let data = match BootloaderType::system_type() {
-            BootloaderType::Grub => self.handler.use_current_snapshot().await?,
-            BootloaderType::SystemdBoot => {
-                self.systemd
-                    .use_current_snapshot()
-                    .await
-                    .ctx(dctx!(), "Failed to use current systemd-boot snapshot")?;
+        self.handler
+            .use_current_snapshot()
+            .await
+            .ctx(dctx!(), "Failed to use current systemd-boot snapshot")?;
 
-                // TODO: structured response?
-                String::from("ok")
-            }
-        };
-        Ok(data)
+        // TODO: structured response?
+        Ok(String::from("ok"))
     }
 }
 
 pub struct BootKitConfig {
-    handler: DbusHandler,
-    systemd: SystemdDataHandler,
+    handler: BootloaderDataHandler,
 }
 
 #[interface(name = "org.opensuse.bootkit.Config")]
 impl BootKitConfig {
     async fn get_config(&self) -> Result<String, fdo::Error> {
         log::debug!("Calling org.opensuse.bootkit.Config GetConfig");
-        let data = match BootloaderType::system_type() {
-            BootloaderType::Grub => self.handler.get_grub2_config_json().await?,
-            BootloaderType::SystemdBoot => {
-                let config = self
-                    .systemd
-                    .get_config()
-                    .await
-                    .ctx(dctx!(), "Failed to get systemd-boot config")?;
-                config
-                    .serialize()
-                    .ctx(dctx!(), "Failed to to serialize systemd-boot config")?
-            }
-        };
+        let data = self
+            .handler
+            .get_config()
+            .await
+            .ctx(dctx!(), "Failed to get bootloader config")?
+            .serialize()
+            .ctx(dctx!(), "Failed to serialise bootloader config")?;
 
         Ok(data)
     }
 
     async fn save_config(&self, data: &str) -> Result<String, fdo::Error> {
         log::debug!("Calling org.opensuse.bootkit.Config SaveConfig");
-        let data = match BootloaderType::system_type() {
-            BootloaderType::Grub => self.handler.save_grub2_config(data).await?,
-            BootloaderType::SystemdBoot => {
-                let config = BootkitConfig::deserialize(data)
-                    .ctx(dctx!(), "Failed to parse json data to BootkitConfig")?;
-                self.systemd
-                    .save_config(&config)
-                    .await
-                    .ctx(dctx!(), "Failed to get systemd-boot config")?;
+        let config = BootkitConfig::deserialize(data)
+            .ctx(dctx!(), "Failed to parse json data to BootkitConfig")?;
+        self.handler
+            .save_config(&config)
+            .await
+            .ctx(dctx!(), "Failed to get bootloader config")?;
 
-                // TODO: structured response?
-                String::from("ok")
-            }
-        };
-
-        Ok(data)
+        // TODO: structured response?
+        Ok(String::from("ok"))
     }
 
     /// Signal for grub file being changed, provided by zbus macro
@@ -179,16 +144,18 @@ impl BootEntry {
 }
 
 pub async fn create_connection(args: &ConfigArgs, db: &Database) -> zbus::Result<Connection> {
-    let handler = DbusHandler::new(db.clone());
+    let dbus_handler = DbusHandler::new(db.clone());
+    let handler =
+        BootloaderDataHandler::from_loader_type(BootloaderType::system_type(), db.pool().clone());
     let config = BootKitConfig {
         handler: handler.clone(),
-        systemd: SystemdDataHandler::new(db.pool().clone()),
     };
     let snapshots = BootKitSnapshots {
         handler: handler.clone(),
-        systemd: SystemdDataHandler::new(db.pool().clone()),
     };
-    let bootentry = BootEntry { handler };
+    let bootentry = BootEntry {
+        handler: dbus_handler,
+    };
 
     let (connection, contype) = if args.session {
         (Builder::session()?, "session")
