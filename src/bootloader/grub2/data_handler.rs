@@ -324,7 +324,40 @@ impl BootkitDataHandler for Grub2DataHandler {
         Ok(())
     }
 
-    async fn remove_snapshot(&self, _select: &BootkitSnapshotSelect) -> DResult<()> {
-        Err(DError::generic(dctx!(), "Not implemented"))
+    async fn remove_snapshot(&self, select: &BootkitSnapshotSelect) -> DResult<()> {
+        let selected = self
+            .db
+            .selected_snapshot()
+            .await
+            .ctx(dctx!(), "Failed to query selected snapshot")?;
+        let selected_grub = if let Some(id) = selected.grub2_snapshot_id {
+            self.db
+                .grub2_snapshot(id)
+                .await
+                .ctx(dctx!(), "Failed to get grub snapshot")?
+        } else {
+            self.db
+                .latest_grub2()
+                .await
+                .ctx(dctx!(), "Failed to get current grub snapshot")?
+        };
+
+        if select.snapshot_id == selected_grub.id {
+            return Err(DError::generic(
+                dctx!(),
+                "Cannot remove currently selected snapshot",
+            ));
+        }
+
+        self.db
+            .remove_grub2(select.snapshot_id)
+            .await
+            .ctx(dctx!(), "Failed to remove grub2 snapshot")?;
+
+        log::debug!(
+            "Succesfully removed snapshot with id {}",
+            select.snapshot_id
+        );
+        Ok(())
     }
 }
