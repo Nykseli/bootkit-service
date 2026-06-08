@@ -69,10 +69,18 @@ impl Grub2ConfigFile {
             .map(|kv| kv.value.to_string())
     }
 
+    pub fn set_timeout<T: Into<String>>(&mut self, timeout: T) {
+        self.update_or_insert("GRUB_TIMEOUT", timeout);
+    }
+
     pub fn kernel_arguments(&self) -> Option<String> {
         self.file
             .get_key_value("GRUB_CMDLINE_LINUX_DEFAULT")
             .map(|kv| kv.value.to_string())
+    }
+
+    pub fn set_kernel_arguments<K: Into<String>>(&mut self, kernel: K) {
+        self.update_or_insert("GRUB_CMDLINE_LINUX_DEFAULT", kernel);
     }
 }
 
