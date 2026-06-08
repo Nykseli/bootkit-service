@@ -194,9 +194,9 @@ pub trait ConfigFileParser {
         write!(file, "{}", content).ctx(dctx!(), format!("Failed to write to file '{path:?}'"))
     }
 
-    fn compare_diff(&self, other: &Self) -> Option<String> {
-        // TODO: optimize this to accept strings/&str
-        let text_diff = TextDiff::from_lines(&self.as_string(), &other.as_string())
+    fn compare_diff_str<O: AsRef<str>>(&self, other: O) -> Option<String> {
+        let other = other.as_ref();
+        let text_diff = TextDiff::from_lines(self.as_string().as_str(), other)
             .unified_diff()
             .to_string();
 
@@ -207,5 +207,9 @@ pub trait ConfigFileParser {
         } else {
             Some(text_diff)
         }
+    }
+
+    fn compare_diff(&self, other: &Self) -> Option<String> {
+        self.compare_diff_str(other.as_string())
     }
 }

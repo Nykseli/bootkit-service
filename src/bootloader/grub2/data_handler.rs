@@ -10,8 +10,8 @@ use crate::{
     config::GRUB_FILE_PATH,
     data::{
         types::{
-            BootkitBootEntries, BootkitBootEntry, BootkitConfig, BootkitSnapshotSelect,
-            BootkitSnapshots,
+            BootkitBootEntries, BootkitBootEntry, BootkitConfig, BootkitSnapshot,
+            BootkitSnapshotConfig, BootkitSnapshotSelect, BootkitSnapshots,
         },
         BootkitDataHandler,
     },
@@ -91,7 +91,44 @@ impl BootkitDataHandler for Grub2DataHandler {
     }
 
     async fn get_snapshots(&self) -> DResult<BootkitSnapshots> {
-        Err(DError::generic(dctx!(), "Not implemented"))
+        let db_snapshots = self
+            .db
+            .grub2_snapshots()
+            .await
+            .ctx(dctx!(), "Failed to get grub2 snapshots")?;
+        let selected = self
+            .db
+            .selected_snapshot()
+            .await
+            .ctx(dctx!(), "Failed to get selected grub2 snapshot")?;
+        let grub =
+            Grub2ConfigFile::from_file(GRUB_FILE_PATH).ctx(dctx!(), "Failed to read grub file")?;
+        let snapshots: Vec<BootkitSnapshot> = db_snapshots
+            .into_iter()
+            .map(|snapshot| {
+                let diff = grub.compare_diff_str(&snapshot.grub_config);
+                let grub_config = BootkitSnapshotConfig {
+                    diff,
+                    contents: snapshot.grub_config,
+                };
+                let kernel = snapshot.selected_kernel.map(|kernel| BootkitBootEntry {
+                    name: kernel,
+                    title: None,
+                });
+
+                BootkitSnapshot {
+                    kernel,
+                    id: snapshot.id,
+                    created: snapshot.created,
+                    configs: HashMap::from([(GRUB_FILE_PATH.into(), grub_config)]),
+                }
+            })
+            .collect();
+
+        Ok(BootkitSnapshots {
+            snapshots,
+            selected: selected.grub2_snapshot_id,
+        })
     }
 
     async fn select_snapshot(&self, _select: &BootkitSnapshotSelect) -> DResult<()> {
