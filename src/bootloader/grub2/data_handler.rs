@@ -3,10 +3,16 @@ use std::collections::HashMap;
 use similar::TextDiff;
 
 use crate::{
-    bootloader::{grub2::config_file::Grub2ConfigFile, parser::ConfigFileParser},
+    bootloader::{
+        grub2::{boot_entries::Grub2BootEntries, config_file::Grub2ConfigFile},
+        parser::ConfigFileParser,
+    },
     config::GRUB_FILE_PATH,
     data::{
-        types::{BootkitBootEntries, BootkitConfig, BootkitSnapshotSelect, BootkitSnapshots},
+        types::{
+            BootkitBootEntries, BootkitBootEntry, BootkitConfig, BootkitSnapshotSelect,
+            BootkitSnapshots,
+        },
         BootkitDataHandler,
     },
     db::Database,
@@ -30,6 +36,8 @@ impl BootkitDataHandler for Grub2DataHandler {
     async fn get_config(&self) -> DResult<BootkitConfig> {
         let grub = Grub2ConfigFile::from_file(GRUB_FILE_PATH)
             .ctx(dctx!(), "Failed to parse default grub config")?;
+        let boot_entries =
+            Grub2BootEntries::new().ctx(dctx!(), "Failed to get grub2 boot entries")?;
 
         let selected = self.db.selected_snapshot().await?;
         let selected_grub = if let Some(id) = selected.grub2_snapshot_id {
@@ -58,14 +66,22 @@ impl BootkitDataHandler for Grub2DataHandler {
 
         let timeout = grub.timeout();
         let kernel_arguments = grub.kernel_arguments();
+        let entries = boot_entries
+            .entries()
+            .iter()
+            .map(|entry| BootkitBootEntry {
+                name: entry.entry().into(),
+                title: None,
+            })
+            .collect();
 
         Ok(BootkitConfig {
             timeout,
             config_diffs,
             kernel_arguments,
             boot_entries: BootkitBootEntries {
-                selected: None,
-                boot_entries: vec![],
+                selected: boot_entries.selected(),
+                boot_entries: entries,
             },
         })
     }
