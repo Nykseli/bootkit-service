@@ -134,6 +134,26 @@ impl Database {
         Ok(())
     }
 
+    pub async fn save_grub2_config<K: Into<String>>(
+        &self,
+        grub_file: String,
+        selected_kernel: Option<K>,
+    ) -> DResult<()> {
+        let selected_kernel: Option<String> = selected_kernel.map(K::into);
+
+        sqlx::query!(
+            "INSERT INTO grub2_snapshot (grub_config, selected_kernel) VALUES (?, ?)",
+            grub_file,
+            selected_kernel,
+        )
+        .execute(&self.pool)
+        .await
+        .ctx(dctx!(), "Cannot insert new entry to grub2_snapshot table")?;
+
+        log::debug!("New grub2 config snapshot inserted to grub2_snapshot table");
+        Ok(())
+    }
+
     pub async fn remove_grub2(&self, grub_id: i64) -> DResult<()> {
         sqlx::query!("DELETE FROM grub2_snapshot WHERE id=(?)", grub_id)
             .execute(&self.pool)
