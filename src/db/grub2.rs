@@ -136,6 +136,7 @@ impl Grub2Db {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn latest_snapshot(&self) -> DResult<Grub2Snapshot> {
         let snapshot = sqlx::query_as!(
             Grub2Snapshot,
