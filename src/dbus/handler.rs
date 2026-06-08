@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::{fs::File, io::Write, process::Command};
 
 use serde::{Deserialize, Serialize};
