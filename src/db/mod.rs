@@ -1,4 +1,4 @@
-use std::{fs::File, path::Path};
+use std::{fs::File, marker::PhantomData, path::Path};
 
 use sqlx::{sqlite::SqlitePoolOptions, Pool, Sqlite};
 
@@ -15,11 +15,17 @@ pub mod selected_snapshot;
 pub mod systemd_boot;
 
 #[derive(Clone)]
-pub struct Database {
+pub struct InitializedDb {}
+#[derive(Clone)]
+pub struct UninitializedDb {}
+
+#[derive(Clone)]
+pub struct Database<T> {
     pool: Pool<Sqlite>,
+    _type: PhantomData<T>,
 }
 
-impl Database {
+impl Database<UninitializedDb> {
     pub async fn new() -> DResult<Self> {
         if !Path::new(DATABASE_PATH).exists() {
             log::debug!("Database file in was not found. Creating it in path {DATABASE_PATH}");
@@ -40,14 +46,13 @@ impl Database {
                 format!("Cannot initialize SQLite database in path: {DATABASE_PATH}"),
             )?;
 
-        Ok(Self { pool })
+        Ok(Self {
+            pool,
+            _type: PhantomData,
+        })
     }
 
-    pub fn pool(&self) -> &Pool<Sqlite> {
-        &self.pool
-    }
-
-    pub async fn initialize(&self) -> DResult<()> {
+    pub async fn initialize(self) -> DResult<Database<InitializedDb>> {
         match BootloaderType::system_type() {
             BootloaderType::Grub => initialize_grub2_database(&self.pool)
                 .await
@@ -55,6 +60,17 @@ impl Database {
             BootloaderType::SystemdBoot => initialize_systemd_boot(&self.pool)
                 .await
                 .ctx(dctx!(), "Systemd boot db initialization failed"),
-        }
+        }?;
+
+        Ok(Database::<InitializedDb> {
+            pool: self.pool,
+            _type: PhantomData,
+        })
+    }
+}
+
+impl Database<InitializedDb> {
+    pub fn pool(&self) -> &Pool<Sqlite> {
+        &self.pool
     }
 }
