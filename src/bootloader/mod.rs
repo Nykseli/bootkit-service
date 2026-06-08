@@ -3,6 +3,8 @@ use std::{
     sync::OnceLock,
 };
 
+use sqlx::{Pool, Sqlite};
+
 use crate::{
     bootloader::{
         grub2::data_handler::Grub2DataHandler, systemd_boot::data_handler::SystemdDataHandler,
@@ -11,7 +13,6 @@ use crate::{
         types::{BootkitConfig, BootkitSnapshotSelect, BootkitSnapshots},
         BootkitDataHandler,
     },
-    db::Database,
     dctx,
     errors::{DError, DRes, DResult},
 };
@@ -112,12 +113,10 @@ pub enum BootloaderDataHandler {
 }
 
 impl BootloaderDataHandler {
-    pub fn from_loader_type(bootloader: BootloaderType, db: Database) -> Self {
+    pub fn from_loader_type(bootloader: BootloaderType, pool: Pool<Sqlite>) -> Self {
         match bootloader {
-            BootloaderType::Grub => Self::Grub2(Grub2DataHandler::new(db)),
-            BootloaderType::SystemdBoot => {
-                Self::SystemdBoot(SystemdDataHandler::new(db.pool().clone()))
-            }
+            BootloaderType::Grub => Self::Grub2(Grub2DataHandler::new(pool)),
+            BootloaderType::SystemdBoot => Self::SystemdBoot(SystemdDataHandler::new(pool)),
         }
     }
 }
