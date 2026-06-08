@@ -7,7 +7,7 @@ use crate::{
         types::{BootkitConfig, BootkitSnapshotSelect},
         BootkitDataHandler,
     },
-    db::Database,
+    db::{Database, InitializedDb},
     dctx,
     errors::DRes,
 };
@@ -129,7 +129,10 @@ impl BootKitConfig {
     async fn file_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
 }
 
-pub async fn create_connection(args: &ConfigArgs, db: &Database) -> zbus::Result<Connection> {
+pub async fn create_connection(
+    args: &ConfigArgs,
+    db: Database<InitializedDb>,
+) -> zbus::Result<Connection> {
     let handler =
         BootloaderDataHandler::from_loader_type(BootloaderType::system_type(), db.pool().clone());
     let config = BootKitConfig {

@@ -31,11 +31,12 @@ async fn main() -> DResult<()> {
     log::debug!("Bootloader type '{loader_type:?}' detected");
 
     let db = Database::new().await?;
-    db.initialize()
+    let db = db
+        .initialize()
         .await
         .ctx(dctx!(), "Failed to initialize database")?;
 
-    let connection = create_connection(&args, &db)
+    let connection = create_connection(&args, db)
         .await
         .ctx(dctx!(), "Failed to create Zbus connection")?;
 
