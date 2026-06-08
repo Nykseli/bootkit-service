@@ -7,7 +7,6 @@ mod db;
 mod dbus;
 mod errors;
 mod events;
-mod grub2;
 mod logging;
 
 use crate::{

@@ -8,7 +8,6 @@ use crate::{
         BootkitDataHandler,
     },
     db::Database,
-    dbus::handler::DbusHandler,
     dctx,
     errors::DRes,
 };
@@ -130,21 +129,7 @@ impl BootKitConfig {
     async fn file_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
 }
 
-pub struct BootEntry {
-    handler: DbusHandler,
-}
-
-#[interface(name = "org.opensuse.bootkit.BootEntry")]
-impl BootEntry {
-    async fn get_entries(&self) -> Result<String, fdo::Error> {
-        log::debug!("Calling org.opensuse.bootkit.BootEntry GetEntries");
-        let data = self.handler.get_grub2_boot_entries_json().await?;
-        Ok(data)
-    }
-}
-
 pub async fn create_connection(args: &ConfigArgs, db: &Database) -> zbus::Result<Connection> {
-    let dbus_handler = DbusHandler::new(db.clone());
     let handler =
         BootloaderDataHandler::from_loader_type(BootloaderType::system_type(), db.pool().clone());
     let config = BootKitConfig {
@@ -152,9 +137,6 @@ pub async fn create_connection(args: &ConfigArgs, db: &Database) -> zbus::Result
     };
     let snapshots = BootKitSnapshots {
         handler: handler.clone(),
-    };
-    let bootentry = BootEntry {
-        handler: dbus_handler,
     };
 
     let (connection, contype) = if args.session {
@@ -167,7 +149,6 @@ pub async fn create_connection(args: &ConfigArgs, db: &Database) -> zbus::Result
         .name("org.opensuse.bootkit")?
         .serve_at("/org/opensuse/bootkit", BootKitInfo {})?
         .serve_at("/org/opensuse/bootkit", config)?
-        .serve_at("/org/opensuse/bootkit", bootentry)?
         .serve_at("/org/opensuse/bootkit", snapshots)?
         .build()
         .await?;
