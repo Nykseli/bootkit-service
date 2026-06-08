@@ -146,7 +146,7 @@ impl BootEntry {
 pub async fn create_connection(args: &ConfigArgs, db: &Database) -> zbus::Result<Connection> {
     let dbus_handler = DbusHandler::new(db.clone());
     let handler =
-        BootloaderDataHandler::from_loader_type(BootloaderType::system_type(), db.clone());
+        BootloaderDataHandler::from_loader_type(BootloaderType::system_type(), db.pool().clone());
     let config = BootKitConfig {
         handler: handler.clone(),
     };

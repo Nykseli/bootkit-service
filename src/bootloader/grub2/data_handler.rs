@@ -1,6 +1,7 @@
 use std::{collections::HashMap, process::Command};
 
 use similar::TextDiff;
+use sqlx::{Pool, Sqlite};
 
 use crate::{
     bootloader::{
@@ -15,7 +16,7 @@ use crate::{
         },
         BootkitDataHandler,
     },
-    db::Database,
+    db::grub2::Grub2Db,
     dctx,
     errors::{DError, DRes, DResult},
 };
@@ -128,13 +129,14 @@ fn update_grub2_system_cfg(
 
 #[derive(Clone)]
 pub struct Grub2DataHandler {
-    // TODO: rewrite this into grub2 database
-    db: Database,
+    db: Grub2Db,
 }
 
 impl Grub2DataHandler {
-    pub fn new(db: Database) -> Self {
-        Self { db }
+    pub fn new(pool: Pool<Sqlite>) -> Self {
+        Self {
+            db: Grub2Db::new(pool),
+        }
     }
 }
 
@@ -145,18 +147,11 @@ impl BootkitDataHandler for Grub2DataHandler {
         let boot_entries =
             Grub2BootEntries::new().ctx(dctx!(), "Failed to get grub2 boot entries")?;
 
-        let selected = self.db.selected_snapshot().await?;
-        let selected_grub = if let Some(id) = selected.grub2_snapshot_id {
-            self.db
-                .grub2_snapshot(id)
-                .await
-                .ctx(dctx!(), "Failed to get grub snapshot")?
-        } else {
-            self.db
-                .latest_grub2()
-                .await
-                .ctx(dctx!(), "Failed to get current grub snapshot")?
-        };
+        let selected_grub = self
+            .db
+            .current_snapshot()
+            .await
+            .ctx(dctx!(), "Failed to get current snapshot")?;
 
         // TODO: replace this with diffing in parser
         let diff = TextDiff::from_lines(&selected_grub.grub_config, &grub.as_string())
@@ -193,18 +188,11 @@ impl BootkitDataHandler for Grub2DataHandler {
     }
 
     async fn save_config(&self, config: &BootkitConfig) -> DResult<()> {
-        let selected = self.db.selected_snapshot().await?;
-        let selected_grub = if let Some(id) = selected.grub2_snapshot_id {
-            self.db
-                .grub2_snapshot(id)
-                .await
-                .ctx(dctx!(), "Failed to get grub snapshot")?
-        } else {
-            self.db
-                .latest_grub2()
-                .await
-                .ctx(dctx!(), "Failed to get current grub snapshot")?
-        };
+        let selected_grub = self
+            .db
+            .current_snapshot()
+            .await
+            .ctx(dctx!(), "Failed to get current snapshot")?;
 
         let mut grub_config = Grub2ConfigFile::new(GRUB_FILE_PATH, &selected_grub.grub_config)
             .ctx(dctx!(), "Failed to parse grub config from snapshot")?;
@@ -241,7 +229,7 @@ impl BootkitDataHandler for Grub2DataHandler {
     async fn get_snapshots(&self) -> DResult<BootkitSnapshots> {
         let db_snapshots = self
             .db
-            .grub2_snapshots()
+            .snapshots()
             .await
             .ctx(dctx!(), "Failed to get grub2 snapshots")?;
         let selected = self
@@ -249,6 +237,7 @@ impl BootkitDataHandler for Grub2DataHandler {
             .selected_snapshot()
             .await
             .ctx(dctx!(), "Failed to get selected grub2 snapshot")?;
+
         let grub =
             Grub2ConfigFile::from_file(GRUB_FILE_PATH).ctx(dctx!(), "Failed to read grub file")?;
         let snapshots: Vec<BootkitSnapshot> = db_snapshots
@@ -283,7 +272,7 @@ impl BootkitDataHandler for Grub2DataHandler {
         // TODO: do not reselect currently selected snapshot
         let snapshot = self
             .db
-            .grub2_snapshot(select.snapshot_id)
+            .snapshot(select.snapshot_id)
             .await
             .ctx(dctx!(), "Failed to find grub2 snapshot")?;
 
@@ -302,18 +291,11 @@ impl BootkitDataHandler for Grub2DataHandler {
     }
 
     async fn use_current_snapshot(&self) -> DResult<()> {
-        let selected = self.db.selected_snapshot().await?;
-        let selected_grub = if let Some(id) = selected.grub2_snapshot_id {
-            self.db
-                .grub2_snapshot(id)
-                .await
-                .ctx(dctx!(), "Failed to get grub snapshot")?
-        } else {
-            self.db
-                .latest_grub2()
-                .await
-                .ctx(dctx!(), "Failed to get current grub snapshot")?
-        };
+        let selected_grub = self
+            .db
+            .current_snapshot()
+            .await
+            .ctx(dctx!(), "Failed to get current snapshot")?;
 
         let mut grub_config = Grub2ConfigFile::new(GRUB_FILE_PATH, &selected_grub.grub_config)
             .ctx(dctx!(), "Failed to create grub2 config from snapshot data")?;
@@ -325,23 +307,11 @@ impl BootkitDataHandler for Grub2DataHandler {
     }
 
     async fn remove_snapshot(&self, select: &BootkitSnapshotSelect) -> DResult<()> {
-        let selected = self
+        let selected_grub = self
             .db
-            .selected_snapshot()
+            .current_snapshot()
             .await
-            .ctx(dctx!(), "Failed to query selected snapshot")?;
-        let selected_grub = if let Some(id) = selected.grub2_snapshot_id {
-            self.db
-                .grub2_snapshot(id)
-                .await
-                .ctx(dctx!(), "Failed to get grub snapshot")?
-        } else {
-            self.db
-                .latest_grub2()
-                .await
-                .ctx(dctx!(), "Failed to get current grub snapshot")?
-        };
-
+            .ctx(dctx!(), "Failed to get current snapshot")?;
         if select.snapshot_id == selected_grub.id {
             return Err(DError::generic(
                 dctx!(),
@@ -350,7 +320,7 @@ impl BootkitDataHandler for Grub2DataHandler {
         }
 
         self.db
-            .remove_grub2(select.snapshot_id)
+            .remove_snapshot(select.snapshot_id)
             .await
             .ctx(dctx!(), "Failed to remove grub2 snapshot")?;
 

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::{fs::File, path::Path};
 
 use sqlx::{sqlite::SqlitePoolOptions, Error, Pool, Sqlite};
@@ -6,7 +7,8 @@ use crate::{
     bootloader::BootloaderType,
     config::{DATABASE_PATH, GRUB_FILE_PATH},
     db::{
-        grub2::Grub2Snapshot, selected_snapshot::SelectedSnapshot,
+        grub2::{initialize_grub2_database, Grub2Snapshot},
+        selected_snapshot::SelectedSnapshot,
         systemd_boot::initialize_systemd_boot,
     },
     dctx,
@@ -53,8 +55,7 @@ impl Database {
 
     pub async fn initialize(&self) -> DResult<()> {
         match BootloaderType::system_type() {
-            BootloaderType::Grub => self
-                .initialize_grub()
+            BootloaderType::Grub => initialize_grub2_database(&self.pool)
                 .await
                 .ctx(dctx!(), "Grub db initialization failed"),
             BootloaderType::SystemdBoot => initialize_systemd_boot(&self.pool)
