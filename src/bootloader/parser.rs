@@ -125,6 +125,22 @@ impl ConfigFile {
             .filter_map(FileLine::key_value_mut)
             .find(|kv| kv.key == key)
     }
+
+    pub fn remove_existing_key_value(&mut self, key: &str) {
+        let kv_idx = if let Some((idx, _)) = self
+            .lines
+            .iter()
+            .filter_map(FileLine::key_value)
+            .enumerate()
+            .find(|(_, kv)| kv.key == key)
+        {
+            idx
+        } else {
+            return;
+        };
+
+        self.lines.remove(kv_idx);
+    }
 }
 
 #[allow(dead_code)]
@@ -169,6 +185,18 @@ pub trait ConfigFileParser {
     fn as_string(&self) -> String {
         let lines: Vec<String> = self.lines().iter().map(Self::format_config_line).collect();
         lines.join("\n")
+    }
+
+    fn remove_if_exists<K: AsRef<str>>(&mut self, key: K) {
+        let key = key.as_ref();
+        self.config_file_mut().remove_existing_key_value(key);
+    }
+
+    fn update_if_exists<K: AsRef<str>, V: Into<String>>(&mut self, key: K, value: V) {
+        let key = key.as_ref();
+        if let Some(key_val) = self.get_key_value_mut(key) {
+            key_val.update(value);
+        }
     }
 
     fn update_or_insert<K: AsRef<str>, V: Into<String>>(&mut self, key: K, value: V) {

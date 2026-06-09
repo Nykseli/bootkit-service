@@ -26,6 +26,15 @@ pub enum BootkitConsoleConfigs {
     Grub2(BootkitGrub2ConsoleConfig),
 }
 
+impl BootkitConsoleConfigs {
+    pub fn as_grub2(&self) -> Option<&BootkitGrub2ConsoleConfig> {
+        match self {
+            BootkitConsoleConfigs::Grub2(grub2) => Some(grub2),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BootkitBootEntry {
     /// "Raw" name, usually containing more techical info
