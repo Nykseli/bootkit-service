@@ -332,6 +332,22 @@ impl BootkitDataHandler for Grub2DataHandler {
     }
 
     async fn snapshot_from_system(&self) -> DResult<()> {
-        Err(DError::generic(dctx!(), "Not implemented"))
+        let grub_config = Grub2ConfigFile::from_file(GRUB_FILE_PATH)
+            .ctx(dctx!(), "Failed to get grub2 config")?;
+        let entries = Grub2BootEntries::new().ctx(dctx!(), "Failed to get grub2 boot entries")?;
+
+        self.db
+            .save_grub2_config(grub_config.as_string(), entries.selected())
+            .await
+            .ctx(dctx!(), "Failed to save new grub2 snapshot")?;
+
+        // set the selected snapshot to None since we want to use the latest one after saving
+        self.db
+            .set_selected_snapshot(None)
+            .await
+            .ctx(dctx!(), "Failed to reset selected grub2 snapshot")?;
+
+        log::debug!("Succesfully created a new snapshot from system state");
+        Ok(())
     }
 }
