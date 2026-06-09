@@ -82,6 +82,21 @@ impl Grub2ConfigFile {
     pub fn set_kernel_arguments<K: Into<String>>(&mut self, kernel: K) {
         self.update_or_insert("GRUB_CMDLINE_LINUX_DEFAULT", kernel);
     }
+
+    pub fn is_graphical_console(&self) -> bool {
+        self.get_key_value("GRUB_TERMINAL")
+            .is_some_and(|val| val.value == "gfxterm")
+    }
+
+    pub fn console_resolution(&self) -> String {
+        self.get_key_value("GRUB_GFXMODE")
+            .map_or("auto".into(), |kv| kv.value.clone())
+    }
+
+    pub fn console_theme(&self) -> Option<String> {
+        self.get_key_value("GRUB_THEME").map(|kv| kv.value.clone())
+    }
+
 }
 
 impl ConfigFileParser for Grub2ConfigFile {
