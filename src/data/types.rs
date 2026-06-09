@@ -10,6 +10,23 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BootkitGrub2ConsoleConfig {
+    pub graphical_enabled: bool,
+    /// Seleceted console resolution or "auto"
+    pub console_resolution: String,
+    pub console_theme: Option<String>,
+    // TODO: use hwinfo --framebuffer to get available resolutions
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "loader")]
+pub enum BootkitConsoleConfigs {
+    /// SystemdBoot console configs are not supported
+    SystemdBoot,
+    Grub2(BootkitGrub2ConsoleConfig),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BootkitBootEntry {
     /// "Raw" name, usually containing more techical info
     pub name: String,
@@ -32,6 +49,8 @@ pub struct BootkitConfig {
     /// Usually caused by 3rd party editing configs
     /// (File) name -> diff data
     pub config_diffs: Option<HashMap<String, String>>,
+    /// Console configs for loaders that support them
+    pub console: Option<BootkitConsoleConfigs>,
     // TODO: Raw config values for the specific bootloader
 }
 
@@ -57,6 +76,7 @@ impl Default for BootkitConfig {
             },
             kernel_arguments: Default::default(),
             config_diffs: None,
+            console: None,
         }
     }
 }

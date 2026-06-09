@@ -11,8 +11,9 @@ use crate::{
     config::GRUB_FILE_PATH,
     data::{
         types::{
-            BootkitBootEntries, BootkitBootEntry, BootkitConfig, BootkitSnapshot,
-            BootkitSnapshotConfig, BootkitSnapshotSelect, BootkitSnapshots,
+            BootkitBootEntries, BootkitBootEntry, BootkitConfig, BootkitConsoleConfigs,
+            BootkitGrub2ConsoleConfig, BootkitSnapshot, BootkitSnapshotConfig,
+            BootkitSnapshotSelect, BootkitSnapshots,
         },
         BootkitDataHandler,
     },
@@ -184,6 +185,11 @@ impl BootkitDataHandler for Grub2DataHandler {
                 selected: boot_entries.selected(),
                 boot_entries: entries,
             },
+            console: Some(BootkitConsoleConfigs::Grub2(BootkitGrub2ConsoleConfig {
+                graphical_enabled: grub.is_graphical_console(),
+                console_resolution: grub.console_resolution(),
+                console_theme: grub.console_theme(),
+            })),
         })
     }
 

@@ -212,6 +212,7 @@ impl BootkitDataHandler for SystemdDataHandler {
                 selected: Some(selected_entry),
                 boot_entries: entries,
             },
+            console: None,
         })
     }
 
