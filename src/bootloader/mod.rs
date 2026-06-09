@@ -163,4 +163,11 @@ impl BootkitDataHandler for BootloaderDataHandler {
             Self::SystemdBoot(handler) => handler.remove_snapshot(select).await,
         }
     }
+
+    async fn snapshot_from_system(&self) -> DResult<()> {
+        match self {
+            Self::Grub2(handler) => handler.snapshot_from_system().await,
+            Self::SystemdBoot(handler) => handler.snapshot_from_system().await,
+        }
+    }
 }

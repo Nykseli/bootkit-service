@@ -90,6 +90,17 @@ impl BootKitSnapshots {
         // TODO: structured response?
         Ok(String::from("ok"))
     }
+
+    async fn snapshot_from_system(&self) -> Result<String, fdo::Error> {
+        log::debug!("Calling org.opensuse.bootkit.Snapshot SnapshotFromSystem");
+        self.handler
+            .snapshot_from_system()
+            .await
+            .ctx(dctx!(), "Failed to use system state as snapshot")?;
+
+        // TODO: structured response?
+        Ok(String::from("ok"))
+    }
 }
 
 pub struct BootKitConfig {

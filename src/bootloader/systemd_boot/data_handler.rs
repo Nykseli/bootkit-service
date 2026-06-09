@@ -352,4 +352,8 @@ impl BootkitDataHandler for SystemdDataHandler {
 
         Ok(())
     }
+
+    async fn snapshot_from_system(&self) -> DResult<()> {
+        Err(DError::generic(dctx!(), "Not implemented"))
+    }
 }

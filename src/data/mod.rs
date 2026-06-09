@@ -11,5 +11,7 @@ pub trait BootkitDataHandler {
     async fn get_snapshots(&self) -> DResult<BootkitSnapshots>;
     async fn select_snapshot(&self, select: &BootkitSnapshotSelect) -> DResult<()>;
     async fn use_current_snapshot(&self) -> DResult<()>;
+    /// Create a new snapshot from the state of the system
+    async fn snapshot_from_system(&self) -> DResult<()>;
     async fn remove_snapshot(&self, select: &BootkitSnapshotSelect) -> DResult<()>;
 }
