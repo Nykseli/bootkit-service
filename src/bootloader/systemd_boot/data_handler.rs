@@ -354,6 +354,27 @@ impl BootkitDataHandler for SystemdDataHandler {
     }
 
     async fn snapshot_from_system(&self) -> DResult<()> {
-        Err(DError::generic(dctx!(), "Not implemented"))
+        let config = LoaderConfigFile::from_file(SYSTEMD_CFG_PATH)
+            .ctx(dctx!(), "Failed to parse systemd config")?;
+
+        let entries = SystemdBootEntries::new()
+            .ctx(dctx!(), "Failed to get systemd-boot boot entry information")?;
+        let selected = entries.selected.as_file().ctx(
+            dctx!(),
+            "Expected selected boot entry to not be auto detected entry",
+        )?;
+
+        self.db
+            .save_systemd_boot(&config, selected)
+            .await
+            .ctx(dctx!(), "Failed to save systemd-boot snapshot")?;
+
+        self.db
+            .set_selected_snapshot(None)
+            .await
+            .ctx(dctx!(), "Failed to reset selected snapshot id")?;
+
+        log::debug!("Succesfully created a new snapshot from system state");
+        Ok(())
     }
 }
