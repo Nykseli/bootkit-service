@@ -211,6 +211,16 @@ impl BootkitDataHandler for Grub2DataHandler {
             grub_config.set_kernel_arguments(args);
         }
 
+        // XXX: should console configs be removed if there's none
+        if let Some(console) = &config.console {
+            let grub2_console = console
+                .as_grub2()
+                .ctx(dctx!(), "Expected Grub2 console configs")?;
+            grub_config.set_console_theme(grub2_console.console_theme.as_deref());
+            grub_config.set_console_resolution(&grub2_console.console_resolution);
+            grub_config.set_is_graphical_console(grub2_console.graphical_enabled);
+        }
+
         update_grub2_system_cfg(&mut grub_config, &config.boot_entries.selected, false)
             .ctx(dctx!(), "Failed to update grub configuration")?;
 

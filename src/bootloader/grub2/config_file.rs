@@ -88,15 +88,37 @@ impl Grub2ConfigFile {
             .is_some_and(|val| val.value == "gfxterm")
     }
 
+    pub fn set_is_graphical_console(&mut self, enabled: bool) {
+        let value = if enabled { "gfxterm" } else { "console" };
+        self.update_or_insert("GRUB_TERMINAL", value);
+    }
+
     pub fn console_resolution(&self) -> String {
         self.get_key_value("GRUB_GFXMODE")
             .map_or("auto".into(), |kv| kv.value.clone())
+    }
+
+    pub fn set_console_resolution<M: Into<String>>(&mut self, mode: M) {
+        let mode = mode.into();
+        if mode == "auto" {
+            self.update_if_exists("GRUB_GFXMODE", mode);
+        } else {
+            self.update_or_insert("GRUB_GFXMODE", mode);
+        }
     }
 
     pub fn console_theme(&self) -> Option<String> {
         self.get_key_value("GRUB_THEME").map(|kv| kv.value.clone())
     }
 
+    pub fn set_console_theme<T: Into<String>>(&mut self, theme: Option<T>) {
+        let theme = theme.map(Into::into);
+        if let Some(theme) = theme {
+            self.update_or_insert("GRUB_THEME", theme);
+        } else {
+            self.remove_if_exists("GRUB_THEME");
+        }
+    }
 }
 
 impl ConfigFileParser for Grub2ConfigFile {
@@ -144,6 +166,41 @@ mod tests {
             err.error().as_string(),
             "Internal Parse: Failed to parse grub config: Expected '=' on line: 1"
         );
+    }
+
+    #[test]
+    fn test_grub2_remove_existing() {
+        let mut file = Grub2ConfigFile::new("test", "FOO=bar\nGRUB_DEFAULT=saved\n").unwrap();
+        let lines = file.lines();
+        assert_eq!(lines.len(), 3);
+        assert_eq!(lines[0], ("FOO", "bar"));
+        assert_eq!(lines[1], ("GRUB_DEFAULT", "saved"));
+        // make sure the last line is empty (empty trailing line)
+        assert_eq!(lines[2], "");
+
+        file.remove_if_exists("FOO");
+        let lines = file.lines();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], ("GRUB_DEFAULT", "saved"));
+        // make sure the last line is empty (empty trailing line)
+        assert_eq!(lines[1], "");
+    }
+
+    #[test]
+    fn test_grub2_remove_non_existing() {
+        let mut file = Grub2ConfigFile::new("test", "GRUB_DEFAULT=saved\n").unwrap();
+        let lines = file.lines();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], ("GRUB_DEFAULT", "saved"));
+        // make sure the last line is empty (empty trailing line)
+        assert_eq!(lines[1], "");
+
+        file.remove_if_exists("FOO");
+        let lines = file.lines();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], ("GRUB_DEFAULT", "saved"));
+        // make sure the last line is empty (empty trailing line)
+        assert_eq!(lines[1], "");
     }
 
     #[test]
