@@ -60,7 +60,6 @@ pub struct BootkitConfig {
     pub config_diffs: Option<HashMap<String, String>>,
     /// Console configs for loaders that support them
     pub console: Option<BootkitConsoleConfigs>,
-    // TODO: Raw config values for the specific bootloader
 }
 
 impl BootkitConfig {
@@ -95,6 +94,10 @@ impl Default for BootkitConfig {
 pub enum BootkitRawFile {
     /// /etc/default/grub
     Grub2Config { values: Vec<(String, String)> },
+    /// /boot/efi/loader/entries/*.conf
+    SystemdBootEntry { values: Vec<(String, String)> },
+    /// /boot/efi/loader/loader.conf
+    SystemdBootLoader { values: Vec<(String, String)> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

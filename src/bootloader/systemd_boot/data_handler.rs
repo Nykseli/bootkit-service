@@ -13,8 +13,9 @@ use crate::{
     config::SYSTEMD_CFG_PATH,
     data::{
         types::{
-            BootkitBootEntries, BootkitBootEntry, BootkitConfig, BootkitConfigsRaw,
-            BootkitSnapshot, BootkitSnapshotConfig, BootkitSnapshotSelect, BootkitSnapshots,
+            BootkitBootEntries, BootkitBootEntry, BootkitConfig, BootkitConfigRaw,
+            BootkitConfigsRaw, BootkitRawFile, BootkitSnapshot, BootkitSnapshotConfig,
+            BootkitSnapshotSelect, BootkitSnapshots,
         },
         BootkitDataHandler,
     },
@@ -380,6 +381,38 @@ impl BootkitDataHandler for SystemdDataHandler {
     }
 
     async fn get_configs_raw(&self) -> DResult<BootkitConfigsRaw> {
-        Err(DError::generic(dctx!(), "Not implemented"))
+        let snapshot = self
+            .db
+            .current_snapshot()
+            .await
+            .ctx(dctx!(), "Failed to fetch current snapshot")?;
+
+        let loader_conf = LoaderConfigFile::new(SYSTEMD_CFG_PATH, &snapshot.loader_config)
+            .ctx(dctx!(), "Failed to parse snapshot loader config")?;
+        let loader_path = loader_conf
+            .path_string()
+            .ctx(dctx!(), "Failed to get loader config path string")?;
+        let entry_config = EntryConfigFile::new(&snapshot.selected_entry, &snapshot.entry_config)
+            .ctx(dctx!(), "Failed to parse snapshot entry config")?;
+        let entry_path = entry_config
+            .path_string()
+            .ctx(dctx!(), "Failed to get entry config path string")?;
+
+        let configs = vec![
+            BootkitConfigRaw {
+                file_path: loader_path,
+                file: BootkitRawFile::SystemdBootLoader {
+                    values: loader_conf.config_file().as_raw_values(),
+                },
+            },
+            BootkitConfigRaw {
+                file_path: entry_path,
+                file: BootkitRawFile::SystemdBootEntry {
+                    values: entry_config.config_file().as_raw_values(),
+                },
+            },
+        ];
+
+        Ok(BootkitConfigsRaw { configs })
     }
 }
