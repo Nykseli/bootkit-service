@@ -116,14 +116,14 @@ impl ConfigFile {
         self.lines
             .iter()
             .filter_map(FileLine::key_value)
-            .find(|kv| kv.key == key)
+            .rfind(|kv| kv.key == key)
     }
 
     pub fn get_key_value_mut(&mut self, key: &str) -> Option<&mut KeyValue> {
         self.lines
             .iter_mut()
             .filter_map(FileLine::key_value_mut)
-            .find(|kv| kv.key == key)
+            .rfind(|kv| kv.key == key)
     }
 
     pub fn remove_existing_key_value(&mut self, key: &str) {

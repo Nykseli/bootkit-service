@@ -99,6 +99,12 @@ impl ConfigFileParser for LoaderConfigFile {
 mod tests {
     use super::*;
 
+    impl PartialEq<(&str, &str)> for &KeyValue {
+        fn eq(&self, other: &(&str, &str)) -> bool {
+            self.key == other.0 && self.value == other.1
+        }
+    }
+
     impl PartialEq<(&str, &str)> for FileLine {
         fn eq(&self, other: &(&str, &str)) -> bool {
             match self {
@@ -275,5 +281,34 @@ mod tests {
         assert_eq!(lines[0], ("foo", "bar"));
         assert_eq!(lines[1], ("timeout", "20"));
         assert_eq!(file.as_string(), "foo bar\ntimeout 20");
+    }
+
+    #[test]
+    fn test_systemd_entry_duplicate_value() {
+        let file = LoaderConfigFile::new("test", "timeout 10\ntimeout 20").unwrap();
+        let lines = file.lines();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], ("timeout", "10"));
+        assert_eq!(lines[1], ("timeout", "20"));
+        // last definition defines the value in grub configs
+        assert_eq!(file.get_key_value("timeout").unwrap(), ("timeout", "20"));
+    }
+
+    #[test]
+    fn test_systemd_entry_duplicate_value_edit() {
+        let mut file = LoaderConfigFile::new("test", "timeout 10\ntimeout 20").unwrap();
+        let lines = file.lines();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], ("timeout", "10"));
+        assert_eq!(lines[1], ("timeout", "20"));
+
+        let mut config = BootkitConfig::default();
+        config.timeout = Some(String::from("30"));
+        file.update_config(&config);
+        let lines = file.lines();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], ("timeout", "10"));
+        assert_eq!(lines[1], ("timeout", "30"));
+        assert_eq!(file.get_key_value("timeout").unwrap(), ("timeout", "30"));
     }
 }
