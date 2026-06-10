@@ -141,6 +141,15 @@ impl ConfigFile {
 
         self.lines.remove(kv_idx);
     }
+
+    /// Ordered list of key -> value strings
+    pub fn as_raw_values(&self) -> Vec<(String, String)> {
+        self.lines
+            .iter()
+            .filter_map(FileLine::key_value)
+            .map(|kv| (kv.key.clone(), kv.value.clone()))
+            .collect()
+    }
 }
 
 #[allow(dead_code)]
@@ -164,6 +173,15 @@ pub trait ConfigFileParser {
 
     fn path(&self) -> &PathBuf {
         &self.config_file().path
+    }
+
+    fn path_string(&self) -> DResult<String> {
+        Ok(self
+            .config_file()
+            .path
+            .to_str()
+            .ctx(dctx!(), "File PathBuf is not a valid string")?
+            .to_string())
     }
 
     fn lines(&self) -> &[FileLine] {

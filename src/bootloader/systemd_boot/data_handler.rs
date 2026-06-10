@@ -13,8 +13,8 @@ use crate::{
     config::SYSTEMD_CFG_PATH,
     data::{
         types::{
-            BootkitBootEntries, BootkitBootEntry, BootkitConfig, BootkitSnapshot,
-            BootkitSnapshotConfig, BootkitSnapshotSelect, BootkitSnapshots,
+            BootkitBootEntries, BootkitBootEntry, BootkitConfig, BootkitConfigsRaw,
+            BootkitSnapshot, BootkitSnapshotConfig, BootkitSnapshotSelect, BootkitSnapshots,
         },
         BootkitDataHandler,
     },
@@ -377,5 +377,9 @@ impl BootkitDataHandler for SystemdDataHandler {
 
         log::debug!("Succesfully created a new snapshot from system state");
         Ok(())
+    }
+
+    async fn get_configs_raw(&self) -> DResult<BootkitConfigsRaw> {
+        Err(DError::generic(dctx!(), "Not implemented"))
     }
 }
