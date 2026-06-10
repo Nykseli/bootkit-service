@@ -166,9 +166,9 @@ pub const SYSTEMD_CFG_PATH: &str = "/boot/efi/loader/loader.conf";
 pub const SYSTEMD_CFG_PATH: &str = "tmp/systemd_loader.conf";
 
 #[cfg(not(feature = "dev"))]
-pub const SYSTEMD_CFG_ROOT: &str = "/boot/efi/loader/";
+pub const SYSTEMD_CFG_ROOT: &str = "/boot/efi/loader";
 #[cfg(feature = "dev")]
-pub const SYSTEMD_CFG_ROOT: &str = "tmp/";
+pub const SYSTEMD_CFG_ROOT: &str = "tmp";
 
 #[cfg(not(feature = "dev"))]
 pub const DATABASE_PATH: &str = "/var/lib/bootkit/bootkit.db";

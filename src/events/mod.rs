@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     io::ErrorKind,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -9,21 +10,73 @@ use std::{
 };
 
 use event_listener::Listener;
-use inotify::{EventMask, Inotify, WatchMask};
+use inotify::{EventMask, Inotify, WatchDescriptor, WatchMask};
 use zbus::Connection;
 
 use crate::{
-    bootloader::BootloaderType,
-    config::{
-        ConfigArgs, GRUB_BOOT_PATH, GRUB_ENV_PATH, GRUB_ROOT_PATH, SYSTEMD_CFG_PATH,
-        SYSTEMD_CFG_ROOT,
-    },
+    bootloader::{systemd_boot::boot_entries::SystemdBootEntries, BootloaderType},
+    config::{ConfigArgs, GRUB_BOOT_PATH, GRUB_ROOT_PATH, SYSTEMD_CFG_ROOT},
     dbus::connection::BootKitConfigSignals,
     dctx,
-    errors::{DRes, DResult},
+    errors::{DError, DRes, DResult},
 };
 
 type EventHandle<T> = JoinHandle<DResult<T>>;
+
+#[derive(Debug)]
+pub struct EventWatchDir {
+    dir: String,
+    files: Vec<String>,
+}
+
+impl EventWatchDir {
+    fn new<D: Into<String>, F: Into<Vec<String>>>(dir: D, files: F) -> Self {
+        Self {
+            dir: dir.into(),
+            files: files.into(),
+        }
+    }
+
+    fn find_full_path(&self, name: &str) -> Option<String> {
+        let found = self.files.iter().any(|file| file.as_str() == name);
+
+        if found {
+            Some(format!("{}/{}", self.dir, name))
+        } else {
+            None
+        }
+    }
+
+    fn grub2_watch_dirs() -> Vec<Self> {
+        vec![
+            Self::new(GRUB_ROOT_PATH, ["grub".to_string()]),
+            Self::new(GRUB_BOOT_PATH, ["grubenv".to_string()]),
+        ]
+    }
+
+    fn systemd_boot_watch_dirs() -> DResult<Vec<Self>> {
+        let entries =
+            SystemdBootEntries::new().ctx(dctx!(), "Failed to get systemd-boot entries")?;
+        let entry_ids: Vec<String> = entries
+            .entry_files()
+            .iter()
+            .map(|entry| entry.id().to_string())
+            .collect();
+
+        Ok(vec![
+            Self::new(SYSTEMD_CFG_ROOT, ["loader.conf".to_string()]),
+            Self::new("/boot/efi/loader/entries", entry_ids),
+        ])
+    }
+
+    fn system_watch_dirs() -> DResult<Vec<Self>> {
+        match BootloaderType::system_type() {
+            BootloaderType::Grub => Ok(Self::grub2_watch_dirs()),
+            BootloaderType::SystemdBoot => Self::systemd_boot_watch_dirs()
+                .ctx(dctx!(), "Failed to get watch files for systemd-boot"),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct BootkitEvents {
@@ -48,106 +101,67 @@ impl BootkitEvents {
         self.shutdown.store(true, Ordering::Relaxed);
     }
 
-    async fn listen_grub_files_loop(&self) -> zbus::Result<()> {
-        let mut inotify = Inotify::init().expect("Failed to initialize inotify");
+    async fn listen_files_loop(&self) -> DResult<()> {
+        let watch_dirs = EventWatchDir::system_watch_dirs()
+            .ctx(dctx!(), "Failed to get system watch directories")?;
+        let mut notify_watch: HashMap<WatchDescriptor, EventWatchDir> = HashMap::new();
+        let mut inotify = Inotify::init().ctx(dctx!(), "Failed to initialize inotify")?;
 
-        inotify
-            .watches()
-            .add(GRUB_ROOT_PATH, WatchMask::MODIFY)
-            .expect("Failed to watch /etc/default/grub");
-        inotify
-            .watches()
-            .add(GRUB_BOOT_PATH, WatchMask::MODIFY)
-            .expect("Failed to watch /boot/grub2");
-
-        log::info!("Listening to config changes");
-
-        while !self.shutdown.load(Ordering::Relaxed) {
-            let mut buffer = [0; 4096];
-
-            let events = match inotify.read_events_blocking(&mut buffer) {
-                Ok(events) => events,
-                Err(error) if error.kind() == ErrorKind::WouldBlock => continue,
-                Err(err) => panic!("Error while reading events: {err}"),
-            };
-
-            // prevent duplicate modify event triggers
-            let mut signaled = false;
-            for event in events {
-                if event.mask.contains(EventMask::MODIFY)
-                    && !signaled
-                    && event
-                        .name
-                        .is_some_and(|name| name == "grub" || name == "grubenv")
-                {
-                    signaled = true;
-                    self.connection
-                        .object_server()
-                        .interface("/org/opensuse/bootkit")
-                        .await?
-                        .file_changed()
-                        .await?;
-
-                    if let Some(event_name) = event.name {
-                        match event_name
-                            .to_str()
-                            .expect("Failed to convert event_name to str")
-                        {
-                            "grub" => {
-                                log::debug!(
-                                    "{GRUB_ROOT_PATH} contents was modified. Signaling dbus"
-                                )
-                            }
-                            "grubenv" => {
-                                log::debug!("{GRUB_ENV_PATH} contents was modified. Signaling dbus")
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            }
+        for watch in watch_dirs {
+            let wd = inotify
+                .watches()
+                .add(&watch.dir, WatchMask::MODIFY)
+                .unwrap_or_else(|_| panic!("Failed to watch {}", &watch.dir));
+            notify_watch.insert(wd, watch);
         }
 
-        Ok(())
-    }
-
-    async fn listen_systemd_files_loop(&self) -> zbus::Result<()> {
-        let mut inotify = Inotify::init().expect("Failed to initialize inotify");
-
-        inotify
-            .watches()
-            .add(SYSTEMD_CFG_ROOT, WatchMask::MODIFY)
-            .unwrap_or_else(|_| panic!("Failed to watch {SYSTEMD_CFG_ROOT}"));
-
-        log::info!("Listening to config changes");
-
         while !self.shutdown.load(Ordering::Relaxed) {
             let mut buffer = [0; 4096];
 
-            let events = match inotify.read_events_blocking(&mut buffer) {
+            let events = match inotify.read_events(&mut buffer) {
                 Ok(events) => events,
                 Err(error) if error.kind() == ErrorKind::WouldBlock => continue,
-                Err(err) => panic!("Error while reading events: {err}"),
+                Err(err) => {
+                    return Err(DError::generic(
+                        dctx!(),
+                        format!("Error while reading events: {err}"),
+                    ))
+                }
             };
 
             // prevent duplicate modify event triggers
             let mut signaled = false;
             for event in events {
-                if event.mask.contains(EventMask::MODIFY)
-                    && !signaled
-                    && event.name.is_some_and(|name| name == "loader.conf")
-                {
+                if !event.mask.contains(EventMask::MODIFY) || signaled {
+                    continue;
+                }
+
+                let event_watch = notify_watch
+                    .get(&event.wd)
+                    .ctx(dctx!(), "Couldn't find notify files")?;
+
+                let file_match = event
+                    .name
+                    .and_then(|name| name.to_str())
+                    .and_then(|name| event_watch.find_full_path(name));
+
+                if let Some(file) = file_match {
                     signaled = true;
                     self.connection
                         .object_server()
                         .interface("/org/opensuse/bootkit")
-                        .await?
+                        .await
+                        .ctx(dctx!(), "Failed to get dbus interface")?
                         .file_changed()
-                        .await?;
+                        .await
+                        .ctx(dctx!(), "Failed to call file_chaned")?;
 
-                    log::debug!("{SYSTEMD_CFG_PATH} contents was modified. Signaling dbus")
+                    log::debug!("{file} contents was modified. Signaling dbus")
                 }
             }
+
+            // XXX: could we use epoll instead of crude timeouts?
+            thread::sleep(Duration::from_millis(100));
         }
 
         Ok(())
@@ -163,16 +177,9 @@ impl BootkitEvents {
                 .unwrap();
 
             rt.block_on(async {
-                match BootloaderType::system_type() {
-                    BootloaderType::Grub => copy
-                        .listen_grub_files_loop()
-                        .await
-                        .ctx(dctx!(), "Failed to listen grub file events"),
-                    BootloaderType::SystemdBoot => copy
-                        .listen_systemd_files_loop()
-                        .await
-                        .ctx(dctx!(), "Failed to listen systemd file events"),
-                }
+                copy.listen_files_loop()
+                    .await
+                    .ctx(dctx!(), "Failed to listen file modifications")
             })
         })
     }

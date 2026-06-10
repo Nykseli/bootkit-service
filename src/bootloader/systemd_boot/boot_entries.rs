@@ -398,4 +398,11 @@ impl SystemdBootEntries {
 
         Ok(selected_entry)
     }
+
+    pub fn entry_files(&self) -> Vec<&EntryConfigFile> {
+        self.entries
+            .iter()
+            .filter_map(|entry| entry.as_file())
+            .collect()
+    }
 }
