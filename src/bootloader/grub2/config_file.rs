@@ -219,6 +219,22 @@ mod tests {
     }
 
     #[test]
+    fn test_grub2_duplicate_value() {
+        let file = Grub2ConfigFile::new("test", "GRUB_DEFAULT=foo\nGRUB_DEFAULT=saved\n").unwrap();
+        let lines = file.lines();
+        assert_eq!(lines.len(), 3);
+        assert_eq!(lines[0], ("GRUB_DEFAULT", "foo"));
+        assert_eq!(lines[1], ("GRUB_DEFAULT", "saved"));
+        // make sure the last line is empty (empty trailing line)
+        assert_eq!(lines[2], "");
+        // last definition defines the value in grub configs
+        assert_eq!(
+            file.get_key_value("GRUB_DEFAULT").unwrap(),
+            ("GRUB_DEFAULT", "saved")
+        );
+    }
+
+    #[test]
     fn test_grub2_parsing_full() {
         let file_data = read_to_string("test_data/grub_full").unwrap();
         let file = Grub2ConfigFile::new("test", &file_data).unwrap();
