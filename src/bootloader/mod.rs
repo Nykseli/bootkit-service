@@ -10,7 +10,7 @@ use crate::{
         grub2::data_handler::Grub2DataHandler, systemd_boot::data_handler::SystemdDataHandler,
     },
     data::{
-        types::{BootkitConfig, BootkitSnapshotSelect, BootkitSnapshots},
+        types::{BootkitConfig, BootkitConfigsRaw, BootkitSnapshotSelect, BootkitSnapshots},
         BootkitDataHandler,
     },
     dctx,
