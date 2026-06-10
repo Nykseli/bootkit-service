@@ -91,6 +91,32 @@ impl Default for BootkitConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "file_type")]
+pub enum BootkitRawFile {
+    /// /etc/default/grub
+    Grub2Config { values: Vec<(String, String)> },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BootkitConfigRaw {
+    pub file: BootkitRawFile,
+    pub file_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BootkitConfigsRaw {
+    // TODO: map raw config values to bootkit config keys
+    pub configs: Vec<BootkitConfigRaw>,
+}
+
+impl BootkitConfigsRaw {
+    /// Serialize config to json string
+    pub fn serialize(&self) -> DResult<String> {
+        serde_json::to_string(self).ctx(dctx!(), "Failed to serialize BootkitConfigsRaw")
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BootkitSnapshotConfig {
     /// Config file contents
     pub contents: String,

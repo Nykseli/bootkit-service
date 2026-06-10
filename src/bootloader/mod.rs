@@ -136,6 +136,13 @@ impl BootkitDataHandler for BootloaderDataHandler {
         }
     }
 
+    async fn get_configs_raw(&self) -> DResult<BootkitConfigsRaw> {
+        match self {
+            Self::Grub2(handler) => handler.get_configs_raw().await,
+            Self::SystemdBoot(handler) => handler.get_configs_raw().await,
+        }
+    }
+
     async fn get_snapshots(&self) -> DResult<BootkitSnapshots> {
         match self {
             Self::Grub2(handler) => handler.get_snapshots().await,

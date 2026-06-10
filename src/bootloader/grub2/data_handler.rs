@@ -11,9 +11,9 @@ use crate::{
     config::GRUB_FILE_PATH,
     data::{
         types::{
-            BootkitBootEntries, BootkitBootEntry, BootkitConfig, BootkitConsoleConfigs,
-            BootkitGrub2ConsoleConfig, BootkitSnapshot, BootkitSnapshotConfig,
-            BootkitSnapshotSelect, BootkitSnapshots,
+            BootkitBootEntries, BootkitBootEntry, BootkitConfig, BootkitConfigRaw,
+            BootkitConfigsRaw, BootkitConsoleConfigs, BootkitGrub2ConsoleConfig, BootkitRawFile,
+            BootkitSnapshot, BootkitSnapshotConfig, BootkitSnapshotSelect, BootkitSnapshots,
         },
         BootkitDataHandler,
     },
@@ -365,5 +365,21 @@ impl BootkitDataHandler for Grub2DataHandler {
 
         log::debug!("Succesfully created a new snapshot from system state");
         Ok(())
+    }
+
+    async fn get_configs_raw(&self) -> DResult<BootkitConfigsRaw> {
+        let grub_config = Grub2ConfigFile::from_file(GRUB_FILE_PATH)
+            .ctx(dctx!(), "Failed to get grub2 config")?;
+        let values = grub_config.config_file().as_raw_values();
+        let file_path = grub_config
+            .path_string()
+            .ctx(dctx!(), "Failed to get file path string")?;
+
+        let configs = vec![BootkitConfigRaw {
+            file_path,
+            file: BootkitRawFile::Grub2Config { values },
+        }];
+
+        Ok(BootkitConfigsRaw { configs })
     }
 }

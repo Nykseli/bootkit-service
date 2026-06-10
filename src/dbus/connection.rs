@@ -140,6 +140,26 @@ impl BootKitConfig {
     async fn file_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
 }
 
+pub struct BootKitConfigRaw {
+    handler: BootloaderDataHandler,
+}
+
+#[interface(name = "org.opensuse.bootkit.ConfigRaw")]
+impl BootKitConfigRaw {
+    async fn get_configs_raw(&self) -> Result<String, fdo::Error> {
+        log::debug!("Calling org.opensuse.bootkit.ConfigRaw GetConfigsRaw");
+        let data = self
+            .handler
+            .get_configs_raw()
+            .await
+            .ctx(dctx!(), "Failed to get raw bootloader configs")?
+            .serialize()
+            .ctx(dctx!(), "Failed to serialise raw bootloader configs")?;
+
+        Ok(data)
+    }
+}
+
 pub async fn create_connection(
     args: &ConfigArgs,
     db: Database<InitializedDb>,
@@ -147,6 +167,9 @@ pub async fn create_connection(
     let handler =
         BootloaderDataHandler::from_loader_type(BootloaderType::system_type(), db.pool().clone());
     let config = BootKitConfig {
+        handler: handler.clone(),
+    };
+    let config_raw = BootKitConfigRaw {
         handler: handler.clone(),
     };
     let snapshots = BootKitSnapshots {
@@ -163,6 +186,7 @@ pub async fn create_connection(
         .name("org.opensuse.bootkit")?
         .serve_at("/org/opensuse/bootkit", BootKitInfo {})?
         .serve_at("/org/opensuse/bootkit", config)?
+        .serve_at("/org/opensuse/bootkit", config_raw)?
         .serve_at("/org/opensuse/bootkit", snapshots)?
         .build()
         .await?;
