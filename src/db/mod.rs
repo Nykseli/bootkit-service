@@ -5,13 +5,14 @@ use sqlx::{sqlite::SqlitePoolOptions, Pool, Sqlite};
 use crate::{
     bootloader::BootloaderType,
     config::DATABASE_PATH,
-    db::{grub2::initialize_grub2_database, systemd_boot::initialize_systemd_boot},
+    db::{grub2::initialize_grub2_database, setup::SetupDb, systemd_boot::initialize_systemd_boot},
     dctx,
     errors::{DRes, DResult},
 };
 
 pub mod grub2;
 pub mod selected_snapshot;
+mod setup;
 pub mod systemd_boot;
 
 #[derive(Clone)]
@@ -53,6 +54,12 @@ impl Database<UninitializedDb> {
     }
 
     pub async fn initialize(self) -> DResult<Database<InitializedDb>> {
+        let setup = SetupDb::new(&self.pool);
+        setup
+            .setup_tables()
+            .await
+            .ctx(dctx!(), "Failed to setup database")?;
+
         match BootloaderType::system_type() {
             BootloaderType::Grub => initialize_grub2_database(&self.pool)
                 .await

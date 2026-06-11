@@ -7,7 +7,10 @@ cd ..
 if [[ ! -e tmp/bootkit.db ]]; then
     mkdir -p tmp
     touch tmp/bootkit.db
-    for db_file in $(find db -type f -name '*.sql'); do
+    for db_file in $(find db -maxdepth 1 -type f -name '*.sql'); do
+        sqlite3 tmp/bootkit.db < "$db_file"
+    done
+    for db_file in $(find db/migrations -maxdepth 1 -type f -name '*.sql'); do
         sqlite3 tmp/bootkit.db < "$db_file"
     done
 fi

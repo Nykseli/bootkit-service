@@ -27,6 +27,7 @@ pub enum DErrorType {
     Sqlx(String, Box<sqlx::Error>),
     Zbus(String, Box<zbus::Error>),
     Serde(String, Box<serde_json::Error>),
+    IntParse(String, Box<std::num::ParseIntError>),
     JoinError(String, Box<tokio::task::JoinError>),
     ThreadError(String, Box<dyn std::any::Any + Send + 'static>),
 }
@@ -42,6 +43,7 @@ impl DErrorType {
             DErrorType::Sqlx(msg, error) => format!("Interal database error: {msg} ({error})"),
             DErrorType::Zbus(msg, error) => format!("Internal zbus error: {msg} ({error})"),
             DErrorType::Serde(msg, error) => format!("Json handling error: {msg} ({error})"),
+            DErrorType::IntParse(msg, error) => format!("Ingeter parse error: {msg} ({error})"),
             DErrorType::JoinError(msg, error) => format!("Task runtime error: {msg} ({error})"),
             DErrorType::ThreadError(msg, error) => format!("Thread error: {msg} ({error:?})"),
         }
@@ -199,6 +201,18 @@ impl<T> DRes<T> for std::thread::Result<T> {
             Err(err) => Err(DError::new(
                 ctx,
                 DErrorType::ThreadError(msg.into(), Box::new(err)),
+            )),
+        }
+    }
+}
+
+impl<T> DRes<T> for core::result::Result<T, std::num::ParseIntError> {
+    fn ctx<M: Into<String>>(self, ctx: DCtx, msg: M) -> DResult<T> {
+        match self {
+            Ok(value) => Ok(value),
+            Err(err) => Err(DError::new(
+                ctx,
+                DErrorType::IntParse(msg.into(), Box::new(err)),
             )),
         }
     }
