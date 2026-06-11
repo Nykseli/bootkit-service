@@ -1,6 +1,6 @@
 use chrono::NaiveDateTime;
 use serde::Serialize;
-use sqlx::{Error, Pool, Sqlite};
+use sqlx::{Pool, Sqlite};
 
 use crate::{
     bootloader::{
@@ -37,20 +37,6 @@ impl Grub2Db {
     }
 
     async fn initialize(&self) -> DResult<()> {
-        let grub_table = sqlx::query!(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='grub2_snapshot'"
-        )
-        .fetch_one(&self.pool)
-        .await;
-
-        if let Err(Error::RowNotFound) = grub_table {
-            log::debug!("grub2_snapshot table not found from database, creating it");
-            sqlx::query(include_str!("../../db/grub2.sql"))
-                .execute(&self.pool)
-                .await
-                .ctx(dctx!(), "Cannot initialize grub2_snapshots")?;
-        }
-
         let snapshot_count = sqlx::query!("SELECT COUNT(*) as count FROM grub2_snapshot")
             .fetch_one(&self.pool)
             .await
@@ -68,19 +54,6 @@ impl Grub2Db {
             }
         }
 
-        let grub_table = sqlx::query!(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='selected_snapshot'"
-        )
-        .fetch_one(&self.pool)
-        .await;
-
-        if let Err(Error::RowNotFound) = grub_table {
-            log::debug!("selected_snapshot table not found from database, creating it");
-            sqlx::query(include_str!("../../db/selected_snapshot.sql"))
-                .execute(&self.pool)
-                .await
-                .ctx(dctx!(), "Cannot initialize selected_snapshots table")?;
-        }
         log::info!("Initialised database at {DATABASE_PATH}");
         Ok(())
     }

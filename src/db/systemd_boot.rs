@@ -153,20 +153,6 @@ impl SystemdDb {
 }
 
 pub async fn initialize_systemd_boot(pool: &Pool<Sqlite>) -> DResult<()> {
-    let systemd_table = sqlx::query!(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='systemd_boot_snapshot'"
-    )
-    .fetch_one(pool)
-    .await;
-
-    if let Err(sqlx::Error::RowNotFound) = systemd_table {
-        log::debug!("systemd_boot_snapshot table not found from database, creating it");
-        sqlx::query(include_str!("../../db/systemd_boot.sql"))
-            .execute(pool)
-            .await
-            .ctx(dctx!(), "Cannot initialize systemd_boot_snapshot")?;
-    }
-
     let snapshot_count = sqlx::query!("SELECT COUNT(*) as count FROM systemd_boot_snapshot")
         .fetch_one(pool)
         .await
@@ -187,20 +173,6 @@ pub async fn initialize_systemd_boot(pool: &Pool<Sqlite>) -> DResult<()> {
         save_systemd_boot(pool, &config, selected)
             .await
             .ctx(dctx!(), "Failed to save systemd-boot enry")?;
-    }
-
-    let grub_table = sqlx::query!(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='selected_snapshot'"
-    )
-    .fetch_one(pool)
-    .await;
-
-    if let Err(sqlx::Error::RowNotFound) = grub_table {
-        log::debug!("selected_snapshot table not found from database, creating it");
-        sqlx::query(include_str!("../../db/selected_snapshot.sql"))
-            .execute(pool)
-            .await
-            .ctx(dctx!(), "Cannot initialize selected_snapshots table")?;
     }
 
     log::info!("Initialised database at {DATABASE_PATH}");
