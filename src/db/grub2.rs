@@ -156,14 +156,14 @@ impl Grub2Db {
             Grub2Snapshot,
             r#"SELECT id, grub_config, selected_kernel, created FROM grub2_snapshot
             INNER JOIN selected_snapshot on id =
-            CASE WHEN selected_snapshot.grub2_snapshot_id IS NULL THEN id ELSE selected_snapshot.systemd_boot_snapshot_id END
+            CASE WHEN selected_snapshot.grub2_snapshot_id IS NULL THEN id ELSE selected_snapshot.grub2_snapshot_id END
             ORDER BY id DESC LIMIT 1"#
         )
         .fetch_one(&self.pool)
         .await
         .ctx(
             dctx!(),
-            "Cannot fetch snapshot from systemd_boot_snapshot table",
+            "Cannot fetch snapshot from grub2_snapshot table",
         )?;
 
         Ok(snapshot)
