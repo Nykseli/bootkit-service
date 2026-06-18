@@ -118,6 +118,9 @@ impl BootkitEvents {
         while !self.shutdown.load(Ordering::Relaxed) {
             let mut buffer = [0; 4096];
 
+            // XXX: could we use epoll instead of crude timeouts?
+            thread::sleep(Duration::from_millis(100));
+
             let events = match inotify.read_events(&mut buffer) {
                 Ok(events) => events,
                 Err(error) if error.kind() == ErrorKind::WouldBlock => continue,
@@ -159,9 +162,6 @@ impl BootkitEvents {
                     log::debug!("{file} contents was modified. Signaling dbus")
                 }
             }
-
-            // XXX: could we use epoll instead of crude timeouts?
-            thread::sleep(Duration::from_millis(100));
         }
 
         Ok(())
