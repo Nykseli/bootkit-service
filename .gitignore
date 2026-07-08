@@ -1,2 +1,11 @@
 /target
 /tmp
+/test/common/
+/test/images/
+/test/static-code
+bootkitd.spec
+bootkitd*.tar.xz
+vendor.tar.zst
+pkg/lib
+/bots
+Test*

@@ -1,0 +1,46 @@
+#!/usr/bin/python3 -cimport os, sys; os.execv(os.path.dirname(sys.argv[1]) + "/common/pywrap", sys.argv)
+
+import testlib
+import json
+
+from utils import dbus_call
+
+@testlib.nondestructive
+class TestBootkitdGrub(testlib.MachineCase):
+    def testPing(self):
+        m = self.machine
+
+        pong = dbus_call(m, "Info", "Ping", False)
+        self.assertEqual(pong, "pong")
+
+    def testHasSnapshot(self):
+        m = self.machine
+
+        snapshots = dbus_call(m, "Snapshot", "GetSnapshots", True)
+        # By default grub shouldn't have a selected snapshot
+        self.assertEqual(snapshots["selected"], None)
+        # There should be one and only one snapshot by default
+        self.assertEqual(len(snapshots["snapshots"]), 1)
+        # And it should have the id of 1 from db
+        self.assertEqual(snapshots["snapshots"][0]['id'], 1)
+
+
+    def testHasConfig(self):
+        m = self.machine
+
+        config = dbus_call(m, "Config", "GetConfig", True)
+        # opensuse tumbleweed grub config defaults to "1"
+        self.assertEqual(config["timeout"], "1")
+        self.assertEqual(config["config_diffs"], None)
+        self.assertEqual(config["console"]["loader"], "Grub2")
+        # Because of the way grub is setup in tumbleweed testing images,
+        # kernel arguments are reported as empty
+        self.assertEqual(config["kernel_arguments"], "")
+
+        entries = config["boot_entries"]
+        self.assertTrue(len(entries["boot_entries"]) > 0)
+        # By default grub shouldn't have a selected entry
+        self.assertEqual(entries["selected"], None)
+
+if __name__ == '__main__':
+    testlib.test_main()
